@@ -1,0 +1,67 @@
+@tailwind base;
+@tailwind components;
+@tailwind utilities;
+
+@layer base {
+  body {
+    @apply bg-[#f2f2f7] text-[#1d1d1f] antialiased;
+    -webkit-font-smoothing: antialiased;
+    -moz-osx-font-smoothing: grayscale;
+    letter-spacing: -0.01em;
+  }
+
+  .dark body {
+    @apply bg-[#000000] text-white;
+  }
+
+  ::selection {
+    @apply bg-accent-200 text-accent-900;
+  }
+
+  .dark ::selection {
+    @apply bg-accent-700 text-accent-100;
+  }
+}
+
+@layer components {
+  /* ---- Card ---- */
+  .card {
+    @apply bg-white rounded-2xl shadow-card;
+  }
+  .dark .card {
+    @apply bg-[#1c1c1e] shadow-card-dark;
+  }
+
+  /* ---- Section title ---- */
+  .section-title {
+    @apply text-xs font-semibold uppercase tracking-widest text-[#86868b] mb-4;
+  }
+  .dark .section-title {
+    @apply text-[#8e8e93];
+  }
+
+  /* ---- Metric display ---- */
+  .metric-value {
+    @apply text-3xl md:text-4xl font-bold tracking-tight text-accent-600;
+  }
+  .dark .metric-value {
+    @apply text-accent-400;
+  }
+
+  .metric-label {
+    @apply text-xs text-[#86868b] font-medium uppercase tracking-wide;
+  }
+  .dark .metric-label {
+    @apply text-[#8e8e93];
+  }
+
+  /* ---- Zone colors (safe / caution / warn / danger) ---- */
+  .zone-safe    { @apply text-[#34c759]; }
+  .zone-caution { @apply text-[#ccaa00]; }
+  .zone-warn    { @apply text-[#ff9500]; }
+  .zone-danger  { @apply text-[#ff3b30]; }
+
+  .dark .zone-safe    { @apply text-[#30d158]; }
+  .dark .zone-caution { @apply text-[#ffd60a]; }
+  .dark .zone-danger  { @apply text-[#ff453a]; }
+}

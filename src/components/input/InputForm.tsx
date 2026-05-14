@@ -1,0 +1,81 @@
+import { useMemo } from 'react'
+import { useCalculator } from '../../hooks/useCalculator'
+import { BASE_CARB_RANGE, GI_CARB_MODIFIER, elevationCarbModifier } from '../../data/constants'
+import Card from '../layout/Card'
+import DurationInput from './DurationInput'
+import HRZoneSelector from './HRZoneSelector'
+import WeightInput from './WeightInput'
+import TemperatureInput from './TemperatureInput'
+import ElevationInput from './ElevationInput'
+import GITrainingSelector from './GITrainingSelector'
+import SweatRateInput from './SweatRateInput'
+import CustomCarbInput from './CustomCarbInput'
+
+export default function InputForm() {
+  const { planInputs, setPlanInput } = useCalculator()
+
+  const hours = Math.floor(planInputs.durationMinutes / 60)
+  const minutes = planInputs.durationMinutes % 60
+
+  // 动态计算算法推荐碳水目标（与引擎一致）
+  const defaultCarbTarget = useMemo(() => {
+    const base = BASE_CARB_RANGE[planInputs.hrZone]
+    const mod = GI_CARB_MODIFIER[planInputs.giTraining]
+    const elev = elevationCarbModifier(planInputs.elevationGainM ?? 0, planInputs.durationMinutes)
+    return Math.round(base.rec * mod.rec * elev)
+  }, [planInputs.hrZone, planInputs.giTraining, planInputs.elevationGainM, planInputs.durationMinutes])
+
+  return (
+    <Card className="animate-slide-up">
+      <h2 className="section-title">基本信息</h2>
+      <div className="grid grid-cols-1 md:grid-cols-2 gap-5 sm:gap-6">
+        <DurationInput
+          hours={hours}
+          minutes={minutes}
+          distanceKm={planInputs.distanceKm}
+          onChange={(total) => setPlanInput('durationMinutes', total)}
+          onDistanceChange={(km) => setPlanInput('distanceKm', km)}
+        />
+        <WeightInput
+          value={planInputs.weightKg}
+          onChange={(v) => setPlanInput('weightKg', v)}
+        />
+        <div className="md:col-span-2">
+          <HRZoneSelector
+            value={planInputs.hrZone}
+            onChange={(v) => setPlanInput('hrZone', v)}
+          />
+        </div>
+        <TemperatureInput
+          value={planInputs.tempC}
+          onChange={(v) => setPlanInput('tempC', v)}
+        />
+        <ElevationInput
+          value={planInputs.elevationGainM}
+          onChange={(v) => setPlanInput('elevationGainM', v)}
+          durationMinutes={planInputs.durationMinutes}
+        />
+        <GITrainingSelector
+          value={planInputs.giTraining}
+          onChange={(v) => setPlanInput('giTraining', v)}
+        />
+        <SweatRateInput
+          enabled={planInputs.sweatRateProfile !== undefined}
+          profile={planInputs.sweatRateProfile}
+          onToggle={(on) => {
+            if (!on) setPlanInput('sweatRateProfile', undefined)
+            else setPlanInput('sweatRateProfile', 'Normal')
+          }}
+          onProfileChange={(p) => setPlanInput('sweatRateProfile', p)}
+        />
+        <div className="md:col-span-2">
+          <CustomCarbInput
+            value={planInputs.customCarbTarget}
+            onChange={(v) => setPlanInput('customCarbTarget', v)}
+            algorithmTarget={defaultCarbTarget}
+          />
+        </div>
+      </div>
+    </Card>
+  )
+}
