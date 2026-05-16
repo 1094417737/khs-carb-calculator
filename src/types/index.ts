@@ -11,6 +11,11 @@ export type GITrainingLevel = 'Low' | 'Moderate' | 'Well'
 /** 出汗率个体差异 */
 export type SweatRateProfile = 'Low' | 'Normal' | 'High'
 
+/** 骑行: 跟风程度 */
+export type DraftingLevel = 'solo' | 'mixed' | 'drafting'
+/** 骑行: 风速感知 */
+export type WindLevel = 'calm' | 'moderate' | 'strong'
+
 /** 补给计划输入 */
 export interface PlanInputs {
   durationMinutes: number
@@ -22,6 +27,11 @@ export interface PlanInputs {
   elevationGainM?: number  // 累计爬升 (米)
   sweatRateProfile?: SweatRateProfile  // 出汗率自测
   customCarbTarget?: number
+  // 骑行模式
+  cyclingEnabled?: boolean
+  cyclingPowerWatts?: number     // 功率计读数 (watts)
+  cyclingDrafting?: DraftingLevel  // 跟风程度
+  cyclingWind?: WindLevel        // 风速感知
 }
 
 // ============================================================

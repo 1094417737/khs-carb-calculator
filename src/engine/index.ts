@@ -32,7 +32,8 @@ export function calculate(inputs: CalculatorInputs): CalculationResult {
     plan.tempC,
     plan.giTraining,
     plan.durationMinutes,
-    plan.elevationGainM
+    plan.elevationGainM,
+    plan.cyclingEnabled ? plan.cyclingWind : undefined
   )
 
   const sodium = calculateSodium(
@@ -42,6 +43,31 @@ export function calculate(inputs: CalculatorInputs): CalculationResult {
     plan.durationMinutes,
     plan.sweatRateProfile
   )
+
+  // 骑行: 功率→kcal + 跟风→碳水修正
+  let cyclingKcal: number | undefined
+  if (plan.cyclingEnabled && plan.cyclingPowerWatts && plan.cyclingPowerWatts > 0) {
+    const hours = plan.durationMinutes / 60
+    // 机械功 kJ = Watts × hours × 3.6 → 近似 kcal (标准骑行营养学公式)
+    cyclingKcal = Math.round(plan.cyclingPowerWatts * hours * 3.6)
+
+    // 跟风节省能量 → 降低碳水需求 (Blocken 2018: 混合-15%, 跟风-27%)
+    const draftingMod: Record<string, number> = { solo: 1.0, mixed: 0.85, drafting: 0.73 }
+    const draftMod = draftingMod[plan.cyclingDrafting ?? 'solo']
+    if (draftMod < 1.0) {
+      carbs = {
+        ...carbs,
+        gramsPerHour: {
+          low: Math.round(carbs.gramsPerHour.low * draftMod),
+          recommended: Math.round(carbs.gramsPerHour.recommended * draftMod),
+          high: Math.round(carbs.gramsPerHour.high * draftMod),
+          unit: 'g',
+        },
+        totalGrams: Math.round(carbs.totalGrams * draftMod),
+        explanation: carbs.explanation + `（跟风节能 ~${Math.round((1 - draftMod) * 100)}%）`,
+      }
+    }
+  }
 
   const caffeine = calculateCaffeinePlan(
     plan.weightKg,
@@ -84,7 +110,7 @@ export function calculate(inputs: CalculatorInputs): CalculationResult {
     }
   }
 
-  return { carbs, fluid, sodium, caffeine, schedule, productComparison, homemadeMix, warnings }
+  return { carbs, fluid, sodium, caffeine, schedule, productComparison, homemadeMix, cyclingKcal, warnings }
 }
 
 /** 根据糖浆比例上限修正碳水推荐值 */

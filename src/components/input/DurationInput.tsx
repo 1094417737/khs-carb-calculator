@@ -1,24 +1,25 @@
 import { useState } from 'react'
 import Tooltip from '../ui/Tooltip'
 
+export type SportMode = '跑步/马拉松' | '越野' | '骑行' | null
+
 interface DurationInputProps {
   hours: number
   minutes: number
   distanceKm: number | undefined
   onChange: (totalMinutes: number) => void
   onDistanceChange: (km: number | undefined) => void
+  onModeChange?: (mode: SportMode) => void
 }
 
-const QUICK_SELECT = [
-  { label: '半马', minutes: 120, distance: 21.1 },
-  { label: '全马', minutes: 240, distance: 42.2 },
-  { label: '50K越野', minutes: 360, distance: 50 },
-  { label: '100K越野', minutes: 720, distance: 100 },
-  { label: '铁三', minutes: 180, distance: 51.5 },
+const SPORT_MODES: { mode: SportMode; label: string; icon: string; color: string; minutes: number; distance: number; desc: string }[] = [
+  { mode: '跑步/马拉松', label: '跑步/马拉松', icon: '🏃', color: '#2563eb', minutes: 180, distance: 21.1, desc: '路跑·田径场' },
+  { mode: '越野', label: '越野', icon: '🏔️', color: '#16a34a', minutes: 360, distance: 50, desc: '山地·爬升' },
+  { mode: '骑行', label: '骑行', icon: '🚴', color: '#ea580c', minutes: 180, distance: 60, desc: '公路·铁三' },
 ]
 
-export default function DurationInput({ hours, minutes, distanceKm, onChange, onDistanceChange }: DurationInputProps) {
-  const [activeQuick, setActiveQuick] = useState<number | null>(null)
+export default function DurationInput({ hours, minutes, distanceKm, onChange, onDistanceChange, onModeChange }: DurationInputProps) {
+  const [activeMode, setActiveMode] = useState<SportMode>(null)
   const [distEnabled, setDistEnabled] = useState(distanceKm !== undefined)
 
   const totalMinutes = hours * 60 + minutes
@@ -27,16 +28,20 @@ export default function DurationInput({ hours, minutes, distanceKm, onChange, on
     : null
   const paceMin = pace ? Math.floor(pace) : 0
   const paceSec = pace ? Math.round((pace - paceMin) * 60) : 0
+  const speedKmh = distanceKm && distanceKm > 0 && totalMinutes > 0
+    ? (distanceKm / (totalMinutes / 60)).toFixed(1)
+    : null
 
-  function handleQuickSelect(qs: typeof QUICK_SELECT[number]) {
-    setActiveQuick(qs.minutes)
-    onChange(qs.minutes)
-    onDistanceChange(qs.distance)
+  function handleModeSelect(sm: typeof SPORT_MODES[number]) {
+    setActiveMode(sm.mode)
+    onChange(sm.minutes)
+    onDistanceChange(sm.distance)
     setDistEnabled(true)
+    onModeChange?.(sm.mode)
   }
 
   function handleTimeChange(h: number, m: number) {
-    setActiveQuick(null)
+    setActiveMode(null)
     onChange(h * 60 + m)
   }
 
@@ -44,7 +49,27 @@ export default function DurationInput({ hours, minutes, distanceKm, onChange, on
     <div>
       <div className="flex items-center gap-2 mb-2">
         <span className="text-sm font-medium text-[#1d1d1f] dark:text-white">运动时长</span>
-        <Tooltip content="输入预计运动总时长。开启距离后可显示平均配速" />
+        <Tooltip content="输入预计运动总时长，或选择运动类型快速设置" />
+      </div>
+
+      {/* 运动类型选择 */}
+      <div className="flex gap-2 mb-3">
+        {SPORT_MODES.map((sm) => (
+          <button
+            key={sm.mode}
+            type="button"
+            onClick={() => handleModeSelect(sm)}
+            className={`flex-1 py-2 px-3 rounded-xl text-center transition-all duration-200 ${
+              activeMode === sm.mode
+                ? 'text-white shadow-sm'
+                : 'bg-[#e8e8ed] dark:bg-[#2c2c2e] text-[#86868b] dark:text-[#8e8e93] hover:bg-[#dcdce2] dark:hover:bg-[#3a3a3c]'
+            }`}
+            style={activeMode === sm.mode ? { backgroundColor: sm.color } : undefined}
+          >
+            <div className="text-base mb-0.5">{sm.icon}</div>
+            <div className="text-[11px] font-semibold leading-tight">{sm.label}</div>
+          </button>
+        ))}
       </div>
 
       {/* 时间选择 */}
@@ -80,7 +105,7 @@ export default function DurationInput({ hours, minutes, distanceKm, onChange, on
           onClick={() => {
             const next = !distEnabled
             setDistEnabled(next)
-            onDistanceChange(next ? (activeQuick ? QUICK_SELECT.find(q => q.minutes === activeQuick)?.distance : undefined) : undefined)
+            if (!next) onDistanceChange(undefined)
           }}
           className={`relative inline-flex h-5 w-9 shrink-0 cursor-pointer rounded-full transition-colors duration-200 ${
             distEnabled ? 'bg-accent-500' : 'bg-gray-200 dark:bg-[#48484a]'
@@ -114,30 +139,15 @@ export default function DurationInput({ hours, minutes, distanceKm, onChange, on
         )}
       </div>
 
-      {/* 配速显示 */}
+      {/* 配速/速度 */}
       {pace && (
-        <p className="text-xs text-accent-600 dark:text-accent-400 font-medium mb-2">
-          平均配速 {paceMin}:{paceSec.toString().padStart(2, '0')} /km
+        <p className="text-xs text-accent-600 dark:text-accent-400 font-medium">
+          {activeMode === '骑行' && speedKmh
+            ? `平均时速 ${speedKmh} km/h`
+            : `平均配速 ${paceMin}:${paceSec.toString().padStart(2, '0')} /km`
+          }
         </p>
       )}
-
-      {/* 快速选择 */}
-      <div className="flex flex-wrap gap-1.5">
-        {QUICK_SELECT.map((qs) => (
-          <button
-            key={qs.minutes}
-            type="button"
-            onClick={() => handleQuickSelect(qs)}
-            className={`px-3 py-1 text-xs rounded-full transition-all ${
-              activeQuick === qs.minutes
-                ? 'bg-accent-500 text-white'
-                : 'bg-[#e8e8ed] dark:bg-[#2c2c2e] text-[#86868b] dark:text-[#8e8e93] hover:bg-[#dcdce2] dark:hover:bg-[#3a3a3c]'
-            }`}
-          >
-            {qs.label} ({Math.floor(qs.minutes / 60)}h{qs.minutes % 60 > 0 ? `${qs.minutes % 60}m` : ''} · {qs.distance}km)
-          </button>
-        ))}
-      </div>
     </div>
   )
 }

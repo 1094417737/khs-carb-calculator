@@ -143,10 +143,10 @@ export default function HomemadeMixView() {
               value={containerMl}
               onChange={(e) => {
                 const v = Number(e.target.value)
-                if (!isNaN(v)) setContainerMl(Math.min(2000, Math.max(200, v)))
+                if (!isNaN(v)) setContainerMl(Math.min(6000, Math.max(200, v)))
               }}
               min={200}
-              max={2000}
+              max={6000}
               onFocus={(e: React.FocusEvent<HTMLInputElement>) => e.target.select()}
               className="w-20 bg-transparent text-center text-2xl font-bold text-[#1d1d1f] dark:text-white outline-none [appearance:textfield] [&::-webkit-outer-spin-button]:appearance-none [&::-webkit-inner-spin-button]:appearance-none"
             />
@@ -156,7 +156,7 @@ export default function HomemadeMixView() {
             type="button"
             onClick={() => {
               const step = containerMl > 1000 ? 200 : 50
-              setContainerMl(Math.min(2000, containerMl + step))
+              setContainerMl(Math.min(6000, containerMl + step))
             }}
             className="w-8 h-8 rounded-lg bg-white dark:bg-[#2c2c2e] flex items-center justify-center text-[#1d1d1f] dark:text-white text-sm hover:bg-[#dcdce2] dark:hover:bg-[#3a3a3c] transition-colors"
           >+</button>

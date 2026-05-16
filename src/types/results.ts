@@ -109,5 +109,6 @@ export interface CalculationResult {
   schedule: FeedingSchedule
   productComparison?: ProductComparison
   homemadeMix?: HomemadeMix
+  cyclingKcal?: number
   warnings: string[]
 }
