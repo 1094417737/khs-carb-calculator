@@ -1,4 +1,4 @@
-import React, { useState } from 'react'
+import React, { useState, useEffect } from 'react'
 import { useCalculator } from '../../hooks/useCalculator'
 import Card from '../layout/Card'
 import { SALT_PER_SODIUM } from '../../data/constants'
@@ -10,6 +10,9 @@ export default function HomemadeMixView() {
   const mix = results?.homemadeMix
   const sodium = results?.sodium
   const [containerMl, setContainerMl] = useState(500)
+  const [containerText, setContainerText] = useState(String(500))
+
+  useEffect(() => { setContainerText(String(containerMl)) }, [containerMl])
   if (!mix) return null
 
   const saltPerHour = Math.round((sodium?.mgPerHour.recommended ?? 0) * SALT_PER_SODIUM / 1000 * 10) / 10
@@ -139,16 +142,34 @@ export default function HomemadeMixView() {
           >−</button>
           <div className="flex-1 flex items-center justify-center gap-1">
             <input
-              type="number"
-              value={containerMl}
-              onChange={(e) => {
-                const v = Number(e.target.value)
-                if (!isNaN(v)) setContainerMl(Math.min(6000, Math.max(200, v)))
+              type="text"
+              inputMode="numeric"
+              value={containerText}
+              onChange={(e) => setContainerText(e.target.value)}
+              onBlur={() => {
+                const v = Number(containerText)
+                if (isNaN(v) || containerText === '') {
+                  setContainerText(String(containerMl))
+                  return
+                }
+                const clamped = Math.min(6000, Math.max(200, Math.round(v)))
+                setContainerMl(clamped)
+                setContainerText(String(clamped))
               }}
-              min={200}
-              max={6000}
-              onFocus={(e: React.FocusEvent<HTMLInputElement>) => e.target.select()}
-              className="w-20 bg-transparent text-center text-2xl font-bold text-[#1d1d1f] dark:text-white outline-none [appearance:textfield] [&::-webkit-outer-spin-button]:appearance-none [&::-webkit-inner-spin-button]:appearance-none"
+              onKeyDown={(e) => {
+                if (e.key === 'Enter') {
+                  const v = Number(containerText)
+                  if (isNaN(v) || containerText === '') {
+                    setContainerText(String(containerMl))
+                    return
+                  }
+                  const clamped = Math.min(6000, Math.max(200, Math.round(v)))
+                  setContainerMl(clamped)
+                  setContainerText(String(clamped))
+                }
+              }}
+              onFocus={(e) => e.target.select()}
+              className="w-20 bg-transparent text-center text-2xl font-bold text-[#1d1d1f] dark:text-white outline-none"
             />
             <span className="text-sm text-[#86868b] dark:text-[#8e8e93]">ml</span>
           </div>

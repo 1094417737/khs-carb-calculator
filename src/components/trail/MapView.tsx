@@ -1,0 +1,390 @@
+import { useMemo, useEffect, useState } from 'react'
+import { MapContainer, TileLayer, Polyline, Marker, Popup, useMap, useMapEvents } from 'react-leaflet'
+import L from 'leaflet'
+import { useTrail } from '../../hooks/useTrail'
+import { useTheme } from '../../hooks/useTheme'
+import { gradientToHex } from '../../utils/colorScale'
+
+const TILE_URL_DARK = 'https://{s}.basemaps.cartocdn.com/dark_all/{z}/{x}/{y}{r}.png'
+const TILE_URL_LIGHT = 'https://{s}.basemaps.cartocdn.com/light_all/{z}/{x}/{y}{r}.png'
+const TILE_ATTR = '&copy; <a href="https://carto.com/">CARTO</a>'
+
+// ---- start / end marker icons ----
+const startIcon = L.divIcon({
+  className: '',
+  html: `<div style="
+    width:32px;height:32px;border-radius:50%;
+    background:#34c759;display:flex;align-items:center;justify-content:center;
+    box-shadow:0 2px 10px rgba(52,199,89,0.6);border:3px solid white;
+    font-size:14px;font-weight:900;line-height:1;color:white;
+  ">S</div>`,
+  iconSize: [32, 32],
+  iconAnchor: [16, 16],
+  popupAnchor: [0, -16],
+})
+
+const endIcon = L.divIcon({
+  className: '',
+  html: `<div style="
+    width:32px;height:32px;border-radius:50%;
+    background:#ff3b30;display:flex;align-items:center;justify-content:center;
+    box-shadow:0 2px 10px rgba(255,59,48,0.6);border:3px solid white;
+    font-size:14px;font-weight:900;line-height:1;color:white;
+  ">E</div>`,
+  iconSize: [32, 32],
+  iconAnchor: [16, 16],
+  popupAnchor: [0, -16],
+})
+
+// ---- bearing calc (degrees from north) ----
+function bearing(lat1: number, lon1: number, lat2: number, lon2: number): number {
+  const dLon = (lon2 - lon1) * Math.PI / 180
+  const rLat1 = lat1 * Math.PI / 180
+  const rLat2 = lat2 * Math.PI / 180
+  const y = Math.sin(dLon) * Math.cos(rLat2)
+  const x = Math.cos(rLat1) * Math.sin(rLat2) -
+            Math.sin(rLat1) * Math.cos(rLat2) * Math.cos(dLon)
+  return Math.atan2(y, x) * 180 / Math.PI
+}
+
+// ---- arrow icon — "^" chevron pointing north at rest ----
+function arrowIcon(deg: number) {
+  return L.divIcon({
+    className: '',
+    html: `<svg width="16" height="16" viewBox="0 0 16 16" style="transform:rotate(${deg}deg);filter:drop-shadow(0 0 2px rgba(0,0,0,0.6))">
+      <polyline points="4,11 8,5 12,11" fill="none" stroke="rgba(255,255,255,0.7)" stroke-width="2.5" stroke-linecap="round" stroke-linejoin="round"/>
+    </svg>`,
+    iconSize: [16, 16],
+    iconAnchor: [8, 8],
+  })
+}
+
+// ---- gradient track polyline ----
+function GradientTrack() {
+  const { state } = useTrail()
+  const points = state.result?.trackPoints ?? state.trackPoints
+
+  const segments = useMemo(() => {
+    if (points.length < 2) return []
+    const batchSize = 6
+    const segs: { positions: [number, number][]; color: string; key: string }[] = []
+    for (let i = 0; i < points.length - 1; i += batchSize) {
+      const batch = points.slice(i, i + batchSize + 1)
+      const positions: [number, number][] = batch.map(p => [p.lat, p.lon])
+      const avgGrad = batch.reduce((s, p) => s + p.gradient, 0) / batch.length
+      segs.push({ positions, color: gradientToHex(avgGrad), key: `s_${i}` })
+    }
+    return segs
+  }, [points])
+
+  return <>{segments.map(s => <Polyline key={s.key} positions={s.positions} pathOptions={{ color: s.color, weight: 4, opacity: 0.85 }} />)}</>
+}
+
+// ---- direction arrows ----
+const MIN_SPAN_M = 50
+const MIN_IDX_SKIP = 5
+const ARROW_SPACING_KM = 0.8
+
+function DirectionArrows() {
+  const { state } = useTrail()
+  const points = state.result?.trackPoints ?? state.trackPoints
+
+  const arrows = useMemo(() => {
+    if (points.length < MIN_IDX_SKIP * 2) return []
+    const totalDist = points[points.length - 1].cumulativeDistanceKm
+    if (totalDist <= 0) return []
+
+    const result: { lat: number; lon: number; deg: number; key: string }[] = []
+    let nextTargetKm = ARROW_SPACING_KM * 0.5
+
+    for (let i = MIN_IDX_SKIP; i < points.length - MIN_IDX_SKIP; i++) {
+      const distKm = points[i].cumulativeDistanceKm
+      if (distKm < nextTargetKm) continue
+
+      const lookAheadKm = distKm + MIN_SPAN_M / 1000
+      let j = Math.min(i + MIN_IDX_SKIP, points.length - 1)
+      while (j < points.length - 1 && points[j].cumulativeDistanceKm < lookAheadKm) j++
+
+      const a = points[i]
+      const b = points[j]
+      const spanM = (b.cumulativeDistanceKm - a.cumulativeDistanceKm) * 1000
+      if (spanM < MIN_SPAN_M) { nextTargetKm += ARROW_SPACING_KM; continue }
+
+      const deg = bearing(a.lat, a.lon, b.lat, b.lon)
+      result.push({ lat: a.lat, lon: a.lon, deg, key: `arw_${i}` })
+      nextTargetKm += ARROW_SPACING_KM
+    }
+
+    return result
+  }, [points])
+
+  return <>
+    {arrows.map(a => (
+      <Marker key={a.key} position={[a.lat, a.lon]} icon={arrowIcon(a.deg)} interactive={false} />
+    ))}
+  </>
+}
+
+// ---- auto-fit map bounds ----
+function FitBounds() {
+  const { state } = useTrail()
+  const map = useMap()
+  const points = state.result?.trackPoints ?? state.trackPoints
+
+  useEffect(() => {
+    if (points.length > 0) {
+      const lats = points.map(p => p.lat), lons = points.map(p => p.lon)
+      map.fitBounds(
+        L.latLngBounds([Math.min(...lats), Math.min(...lons)], [Math.max(...lats), Math.max(...lons)]),
+        { padding: [30, 30] }
+      )
+    }
+  }, [points, map])
+  return null
+}
+
+// ---- start & end markers ----
+function StartEndMarkers() {
+  const { state } = useTrail()
+  const points = state.result?.trackPoints ?? state.trackPoints
+  if (points.length < 2) return null
+
+  const start = points[0]
+  const end = points[points.length - 1]
+
+  return (
+    <>
+      <Marker position={[start.lat, start.lon]} icon={startIcon} interactive={false}>
+        <Popup><div className="text-xs font-semibold">起点 · 0.0 km</div></Popup>
+      </Marker>
+      <Marker position={[end.lat, end.lon]} icon={endIcon} interactive={false}>
+        <Popup><div className="text-xs font-semibold">终点 · {end.cumulativeDistanceKm.toFixed(1)} km</div></Popup>
+      </Marker>
+    </>
+  )
+}
+
+// ---- nutrition waypoint markers ----
+function createIcon(items: { type?: string; itemName: string; quantity: number }[]) {
+  const hasGel = items.some(i => i.type === 'gel')
+  const hasSalt = items.some(i => i.type === 'salt')
+  const hasSolid = items.some(i => i.type === 'solid')
+  const emoji = (hasGel && hasSalt) ? '⚡💧' : hasGel ? '⚡' : hasSalt ? '💧' : hasSolid ? '🍫' : '📌'
+  const bg = (hasGel && hasSalt) ? '#af52de' : hasGel ? '#ff9500' : hasSalt ? '#007aff' : hasSolid ? '#34c759' : '#8e8e93'
+  return L.divIcon({
+    className: 'waypoint-marker',
+    html: `<div style="width:28px;height:28px;border-radius:50%;background:${bg};display:flex;align-items:center;justify-content:center;box-shadow:0 2px 8px rgba(0,0,0,0.5);border:2px solid white;font-size:12px;line-height:1">${emoji}</div>`,
+    iconSize: [28, 28], iconAnchor: [14, 14], popupAnchor: [0, -14],
+  })
+}
+
+function WaypointMarkers() {
+  const { state, dispatch } = useTrail()
+  const waypoints = state.result?.waypoints ?? []
+
+  return <>{waypoints.map(wp => (
+    <Marker
+      key={wp.id} position={[wp.lat, wp.lon]} icon={createIcon(wp.items)} draggable
+      eventHandlers={{ dragend: (e) => { const pos = e.target.getLatLng(); dispatch({ type: 'MOVE_WAYPOINT', id: wp.id, lat: pos.lat, lon: pos.lng }) } }}
+    >
+      <Popup>
+        <div className="text-xs" style={{ minWidth: '120px' }}>
+          <div className="font-semibold text-[#1d1d1f] mb-1">{wp.distanceKm.toFixed(1)}km · {wp.timeMinutes}min</div>
+          {wp.items.map((item, j) => (
+            <div key={j} className="text-[#86868b]">{item.itemName} <strong>x{item.quantity}</strong></div>
+          ))}
+        </div>
+      </Popup>
+    </Marker>
+  ))}</>
+}
+
+// ---- custom marker flag icon ----
+const flagIcon = L.divIcon({
+  className: '',
+  html: `<div style="width:28px;height:28px;display:flex;align-items:center;justify-content:center;filter:drop-shadow(0 2px 4px rgba(0,0,0,0.5));font-size:20px;">🚩</div>`,
+  iconSize: [28, 28],
+  iconAnchor: [14, 28],
+  popupAnchor: [0, -28],
+})
+
+const SNAP_TOLERANCE_METERS = 80
+
+// ---- Haversine distance in meters ----
+function haversineM(lat1: number, lon1: number, lat2: number, lon2: number): number {
+  const R = 6371000
+  const dLat = (lat2 - lat1) * Math.PI / 180
+  const dLon = (lon2 - lon1) * Math.PI / 180
+  const a = Math.sin(dLat / 2) ** 2 + Math.cos(lat1 * Math.PI / 180) * Math.cos(lat2 * Math.PI / 180) * Math.sin(dLon / 2) ** 2
+  return R * 2 * Math.atan2(Math.sqrt(a), Math.sqrt(1 - a))
+}
+
+// ---- snap click to nearest track point ----
+function MapClickHandler() {
+  const { state, dispatch } = useTrail()
+  const points = state.result?.trackPoints ?? state.trackPoints
+
+  useMapEvents({
+    click(e) {
+      if (points.length === 0) return
+      const { lat, lng } = e.latlng
+
+      let best = points[0]
+      let bestDist = Infinity
+      for (const p of points) {
+        const d = (p.lat - lat) ** 2 + (p.lon - lng) ** 2
+        if (d < bestDist) { bestDist = d; best = p }
+      }
+
+      if (haversineM(lat, lng, best.lat, best.lon) > SNAP_TOLERANCE_METERS) return
+
+      dispatch({
+        type: 'SHOW_MARKER_INPUT',
+        lat: best.lat,
+        lon: best.lon,
+        trackPointIndex: points.indexOf(best),
+        distanceKm: best.cumulativeDistanceKm,
+      })
+    },
+  })
+
+  return null
+}
+
+// ---- custom marker name input overlay ----
+function MarkerInputOverlay() {
+  const { state, dispatch } = useTrail()
+  const pending = state.pendingMarkerInput
+  const [name, setName] = useState('')
+
+  if (!pending) return null
+  const p = pending // captured non-null for TS narrowing
+
+  function confirm() {
+    const trimmed = name.trim()
+    if (!trimmed) return
+    dispatch({
+      type: 'ADD_CUSTOM_MARKER',
+      id: `cm_${Date.now()}_${Math.random().toString(36).slice(2, 8)}`,
+      name: trimmed,
+      lat: p.lat,
+      lon: p.lon,
+      trackPointIndex: p.trackPointIndex,
+      distanceKm: p.distanceKm,
+    })
+    dispatch({ type: 'HIDE_MARKER_INPUT' })
+    setName('')
+  }
+
+  function cancel() {
+    dispatch({ type: 'HIDE_MARKER_INPUT' })
+    setName('')
+  }
+
+  return (
+    <div className="absolute inset-0 z-[1002] flex items-center justify-center pointer-events-auto">
+      <div className="absolute inset-0 bg-black/20" onClick={cancel} />
+      <div className="relative bg-white dark:bg-[#2c2c2e] rounded-2xl shadow-xl px-5 py-4 w-[280px] mx-4">
+        <p className="text-sm font-semibold text-[#1d1d1f] dark:text-white mb-3">
+          添加自定义标记
+        </p>
+        <p className="text-[10px] text-[#86868b] dark:text-[#8e8e93] mb-2">
+          位置: {p.distanceKm.toFixed(2)}km
+        </p>
+        <input
+          type="text"
+          value={name}
+          onChange={e => setName(e.target.value)}
+          onKeyDown={e => { if (e.key === 'Enter') confirm(); if (e.key === 'Escape') cancel() }}
+          placeholder="如：危险下坡、取水点"
+          autoFocus
+          className="w-full bg-[#f5f5f7] dark:bg-[#3a3a3c] rounded-lg px-3 h-10 text-sm text-[#1d1d1f] dark:text-white border border-transparent focus:border-accent-400 outline-none placeholder:text-[#aeaeb2] mb-3"
+        />
+        <div className="flex gap-2">
+          <button
+            type="button" onClick={cancel}
+            className="flex-1 h-9 rounded-lg bg-[#e8e8ed] dark:bg-[#3a3a3c] text-sm text-[#86868b] dark:text-[#8e8e93] font-medium hover:bg-[#dcdce2] dark:hover:bg-[#4a4a4c] transition-colors"
+          >取消</button>
+          <button
+            type="button" onClick={confirm}
+            disabled={!name.trim()}
+            className="flex-1 h-9 rounded-lg bg-accent-500 text-white text-sm font-medium hover:bg-accent-600 disabled:opacity-40 transition-colors"
+          >确认添加</button>
+        </div>
+      </div>
+    </div>
+  )
+}
+
+// ---- custom user markers ----
+function CustomMarkers() {
+  const { state, dispatch } = useTrail()
+  const markers = state.customMarkers ?? []
+
+  return <>{markers.map(m => (
+    <Marker key={m.id} position={[m.lat, m.lon]} icon={flagIcon}>
+      <Popup>
+        <div className="text-xs">
+          <div className="font-semibold mb-1">{m.name}</div>
+          <div className="text-[#86868b]">{m.distanceKm.toFixed(1)}km</div>
+          <button
+            type="button"
+            onClick={() => dispatch({ type: 'DELETE_CUSTOM_MARKER', id: m.id })}
+            className="mt-1 text-[10px] text-red-500 hover:underline"
+          >删除此标记</button>
+        </div>
+      </Popup>
+    </Marker>
+  ))}</>
+}
+
+// ---- main map component ----
+export default function MapView() {
+  const { state } = useTrail()
+  const { theme } = useTheme()
+  const points = state.result?.trackPoints ?? state.trackPoints
+  const [isMobile, setIsMobile] = useState(() => window.innerWidth < 768)
+  const isDark = theme === 'dark'
+
+  useEffect(() => {
+    const mq = window.matchMedia('(max-width: 767px)')
+    const handler = (e: MediaQueryListEvent) => setIsMobile(e.matches)
+    mq.addEventListener('change', handler)
+    return () => mq.removeEventListener('change', handler)
+  }, [])
+
+  if (points.length === 0) return null
+
+  return (
+    <div className={`relative w-full h-full ${isDark ? '' : 'bg-gray-200'}`}>
+      <MapContainer
+        center={[points[0].lat, points[0].lon]} zoom={13}
+        className="w-full h-full"
+        zoomControl={false}
+        attributionControl={false}
+        dragging={!isMobile}
+      >
+        <TileLayer url={isDark ? TILE_URL_DARK : TILE_URL_LIGHT} attribution={TILE_ATTR} />
+        <GradientTrack />
+        <DirectionArrows />
+        <StartEndMarkers />
+        <WaypointMarkers />
+        <CustomMarkers />
+        <MapClickHandler />
+        <FitBounds />
+      </MapContainer>
+
+      {/* Mobile hint overlay */}
+      {isMobile && (
+        <div className="absolute bottom-2 left-1/2 -translate-x-1/2 z-[1001] pointer-events-none">
+          <span className="bg-black/50 backdrop-blur text-white text-[10px] px-3 py-1 rounded-full whitespace-nowrap">
+            👆 双指移动地图
+          </span>
+        </div>
+      )}
+
+      {/* Custom marker name input overlay */}
+      <MarkerInputOverlay />
+    </div>
+  )
+}

@@ -1,7 +1,14 @@
 import { useTheme } from '../../hooks/useTheme'
 import { useCalculator } from '../../hooks/useCalculator'
 
-export default function Header() {
+type AppMode = 'calculator' | 'trail'
+
+interface HeaderProps {
+  mode: AppMode
+  onModeChange: (mode: AppMode) => void
+}
+
+export default function Header({ mode, onModeChange }: HeaderProps) {
   const { theme, toggleTheme } = useTheme()
   const { reset } = useCalculator()
 
@@ -14,7 +21,7 @@ export default function Header() {
           </div>
           <div>
             <h1 className="text-[15px] font-semibold text-[#1d1d1f] dark:text-white leading-none">
-              KHS耐力补碳计算器
+              KHS智能补给规划
             </h1>
             <p className="text-[11px] text-[#86868b] dark:text-[#8e8e93] leading-none mt-0.5 hidden sm:block">
               基于运动科学的个性化补给方案
@@ -23,13 +30,41 @@ export default function Header() {
         </div>
 
         <div className="flex items-center gap-2">
-          <button
-            type="button"
-            onClick={reset}
-            className="h-8 px-3 rounded-lg text-xs font-medium text-[#86868b] dark:text-[#8e8e93] bg-[#e8e8ed] dark:bg-[#2c2c2e] hover:bg-[#dcdce2] dark:hover:bg-[#3a3a3c] transition-colors"
-          >
-            重置
-          </button>
+          {/* Mode tabs */}
+          <div className="flex rounded-lg bg-[#e8e8ed] dark:bg-[#2c2c2e] p-0.5">
+            <button
+              type="button"
+              onClick={() => onModeChange('calculator')}
+              className={`h-7 px-3 rounded-md text-[11px] font-medium transition-colors ${
+                mode === 'calculator'
+                  ? 'bg-white dark:bg-[#3a3a3c] text-[#1d1d1f] dark:text-white shadow-sm'
+                  : 'text-[#86868b] dark:text-[#8e8e93] hover:text-[#1d1d1f] dark:hover:text-white'
+              }`}
+            >
+              补碳计算
+            </button>
+            <button
+              type="button"
+              onClick={() => onModeChange('trail')}
+              className={`h-7 px-3 rounded-md text-[11px] font-medium transition-colors ${
+                mode === 'trail'
+                  ? 'bg-white dark:bg-[#3a3a3c] text-[#1d1d1f] dark:text-white shadow-sm'
+                  : 'text-[#86868b] dark:text-[#8e8e93] hover:text-[#1d1d1f] dark:hover:text-white'
+              }`}
+            >
+              Trail补给
+            </button>
+          </div>
+
+          {mode === 'calculator' && (
+            <button
+              type="button"
+              onClick={reset}
+              className="h-8 px-3 rounded-lg text-xs font-medium text-[#86868b] dark:text-[#8e8e93] bg-[#e8e8ed] dark:bg-[#2c2c2e] hover:bg-[#dcdce2] dark:hover:bg-[#3a3a3c] transition-colors"
+            >
+              重置
+            </button>
+          )}
           <button
             type="button"
             onClick={toggleTheme}

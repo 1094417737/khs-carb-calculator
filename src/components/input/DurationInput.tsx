@@ -1,4 +1,4 @@
-import { useState } from 'react'
+import { useState, useEffect } from 'react'
 import Tooltip from '../ui/Tooltip'
 
 export type SportMode = '跑步/马拉松' | '越野' | '骑行' | null
@@ -21,6 +21,11 @@ const SPORT_MODES: { mode: SportMode; label: string; icon: string; color: string
 export default function DurationInput({ hours, minutes, distanceKm, onChange, onDistanceChange, onModeChange }: DurationInputProps) {
   const [activeMode, setActiveMode] = useState<SportMode>(null)
   const [distEnabled, setDistEnabled] = useState(distanceKm !== undefined)
+
+  // 外部设置距离时自动打开开关 (如 VIP 模块文件解析后回填)
+  useEffect(() => {
+    if (distanceKm !== undefined && !distEnabled) setDistEnabled(true)
+  }, [distanceKm])
 
   const totalMinutes = hours * 60 + minutes
   const pace = distanceKm && distanceKm > 0 && totalMinutes > 0

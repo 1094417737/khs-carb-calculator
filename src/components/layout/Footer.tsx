@@ -9,6 +9,9 @@ export default function Footer() {
         <p className="text-xs text-[#aeaeb2] dark:text-[#636366] mt-1.5">
           基于 ACSM / ISSN / IOC 运动营养共识
         </p>
+        <p className="text-[11px] text-[#d0d0d4] dark:text-[#48484a] mt-3">
+          遇到问题或 Bug？<a href="mailto:2481199653@qq.com?subject=KHS补给计算器问题反馈" className="underline hover:text-[#86868b] dark:hover:text-[#8e8e93] transition-colors">联系开发者</a>
+        </p>
       </div>
     </footer>
   )
