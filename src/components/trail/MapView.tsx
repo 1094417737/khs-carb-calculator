@@ -1,12 +1,12 @@
-import { useMemo, useEffect, useState } from 'react'
+import { useMemo, useEffect, useState, useCallback, useRef } from 'react'
 import { MapContainer, TileLayer, Polyline, Marker, Popup, useMap, useMapEvents } from 'react-leaflet'
 import L from 'leaflet'
 import { useTrail } from '../../hooks/useTrail'
 import { useTheme } from '../../hooks/useTheme'
 import { gradientToHex } from '../../utils/colorScale'
+import { tileKeysForBounds, downloadTiles, getCacheStats } from '../../utils/tileCache'
 
-const TILE_URL_DARK = 'https://{s}.basemaps.cartocdn.com/dark_all/{z}/{x}/{y}{r}.png'
-const TILE_URL_LIGHT = 'https://{s}.basemaps.cartocdn.com/light_all/{z}/{x}/{y}{r}.png'
+const TILE_URL = 'https://{s}.basemaps.cartocdn.com/rastertiles/voyager/{z}/{x}/{y}{r}.png'
 const TILE_ATTR = '&copy; <a href="https://carto.com/">CARTO</a>'
 
 // ---- start / end marker icons ----
@@ -66,7 +66,7 @@ function GradientTrack() {
 
   const segments = useMemo(() => {
     if (points.length < 2) return []
-    const batchSize = 6
+    const batchSize = 12
     const segs: { positions: [number, number][]; color: string; key: string }[] = []
     for (let i = 0; i < points.length - 1; i += batchSize) {
       const batch = points.slice(i, i + batchSize + 1)
@@ -165,38 +165,66 @@ function StartEndMarkers() {
 }
 
 // ---- nutrition waypoint markers ----
-function createIcon(items: { type?: string; itemName: string; quantity: number }[]) {
+function createIcon(items: { type?: string; itemName: string; quantity: number }[], isActive?: boolean) {
   const hasGel = items.some(i => i.type === 'gel')
   const hasSalt = items.some(i => i.type === 'salt')
   const hasSolid = items.some(i => i.type === 'solid')
   const emoji = (hasGel && hasSalt) ? '⚡💧' : hasGel ? '⚡' : hasSalt ? '💧' : hasSolid ? '🍫' : '📌'
   const bg = (hasGel && hasSalt) ? '#af52de' : hasGel ? '#ff9500' : hasSalt ? '#007aff' : hasSolid ? '#34c759' : '#8e8e93'
+  const size = isActive ? 36 : 28
+  const shadow = isActive ? '0 4px 20px rgba(255,204,0,0.8)' : '0 2px 8px rgba(0,0,0,0.5)'
+  const border = isActive ? '3px solid #ffcc00' : '2px solid white'
+  const transform = isActive ? 'transform:scale(1.25);' : ''
   return L.divIcon({
-    className: 'waypoint-marker',
-    html: `<div style="width:28px;height:28px;border-radius:50%;background:${bg};display:flex;align-items:center;justify-content:center;box-shadow:0 2px 8px rgba(0,0,0,0.5);border:2px solid white;font-size:12px;line-height:1">${emoji}</div>`,
-    iconSize: [28, 28], iconAnchor: [14, 14], popupAnchor: [0, -14],
+    className: isActive ? 'waypoint-marker waypoint-marker--active' : 'waypoint-marker',
+    html: `<div style="width:${size}px;height:${size}px;border-radius:50%;background:${bg};display:flex;align-items:center;justify-content:center;box-shadow:${shadow};border:${border};font-size:12px;line-height:1;${transform}">${emoji}</div>`,
+    iconSize: [size, size], iconAnchor: [size / 2, size / 2], popupAnchor: [0, -(size / 2)],
   })
 }
 
 function WaypointMarkers() {
   const { state, dispatch } = useTrail()
   const waypoints = state.result?.waypoints ?? []
+  const pts = state.result?.trackPoints ?? state.trackPoints
+  const activeId = state.activeWaypointId
+  const markerRefs = useRef<Map<string, L.Marker>>(new Map())
 
-  return <>{waypoints.map(wp => (
+  // 当 activeWaypointId 变化时，自动打开对应 marker 的 Popup
+  useEffect(() => {
+    if (activeId && markerRefs.current.has(activeId)) {
+      const marker = markerRefs.current.get(activeId)!
+      setTimeout(() => marker.openPopup(), 50)
+    }
+  }, [activeId])
+
+  return <>{waypoints.map(wp => {
+    const wpEle = pts[wp.trackPointIndex]?.ele
+    const isActive = wp.id === activeId
+    return (
     <Marker
-      key={wp.id} position={[wp.lat, wp.lon]} icon={createIcon(wp.items)} draggable
-      eventHandlers={{ dragend: (e) => { const pos = e.target.getLatLng(); dispatch({ type: 'MOVE_WAYPOINT', id: wp.id, lat: pos.lat, lon: pos.lng }) } }}
+      key={wp.id} position={[wp.lat, wp.lon]}
+      icon={createIcon(wp.items, isActive)}
+      draggable={false}
+      ref={(ref) => {
+        if (ref) markerRefs.current.set(wp.id, ref)
+        else markerRefs.current.delete(wp.id)
+      }}
+      eventHandlers={{
+        click: () => dispatch({ type: 'SET_ACTIVE_WAYPOINT', id: wp.id }),
+      }}
     >
       <Popup>
         <div className="text-xs" style={{ minWidth: '120px' }}>
           <div className="font-semibold text-[#1d1d1f] mb-1">{wp.distanceKm.toFixed(1)}km · {wp.timeMinutes}min</div>
+          {wpEle != null && <div className="text-[11px] text-[#86868b] mb-0.5">海拔: {Math.round(wpEle)}m</div>}
           {wp.items.map((item, j) => (
             <div key={j} className="text-[#86868b]">{item.itemName} <strong>x{item.quantity}</strong></div>
           ))}
         </div>
       </Popup>
     </Marker>
-  ))}</>
+    )
+  })}</>
 }
 
 // ---- custom marker flag icon ----
@@ -208,7 +236,23 @@ const flagIcon = L.divIcon({
   popupAnchor: [0, -28],
 })
 
-const SNAP_TOLERANCE_METERS = 80
+const fullCpIcon = L.divIcon({
+  className: '',
+  html: `<div style="width:28px;height:28px;display:flex;align-items:center;justify-content:center;filter:drop-shadow(0 2px 4px rgba(0,0,0,0.5));font-size:22px;">🏁</div>`,
+  iconSize: [28, 28],
+  iconAnchor: [14, 28],
+  popupAnchor: [0, -28],
+})
+
+const lightCpIcon = L.divIcon({
+  className: '',
+  html: `<div style="width:28px;height:28px;display:flex;align-items:center;justify-content:center;filter:drop-shadow(0 2px 4px rgba(0,0,0,0.5));font-size:20px;">💧</div>`,
+  iconSize: [28, 28],
+  iconAnchor: [14, 28],
+  popupAnchor: [0, -28],
+})
+
+const SNAP_TOLERANCE_METERS = 100
 
 // ---- Haversine distance in meters ----
 function haversineM(lat1: number, lon1: number, lat2: number, lon2: number): number {
@@ -256,6 +300,7 @@ function MarkerInputOverlay() {
   const { state, dispatch } = useTrail()
   const pending = state.pendingMarkerInput
   const [name, setName] = useState('')
+  const [cpType, setCpType] = useState<'none' | 'light' | 'full'>('none')
 
   if (!pending) return null
   const p = pending // captured non-null for TS narrowing
@@ -271,14 +316,17 @@ function MarkerInputOverlay() {
       lon: p.lon,
       trackPointIndex: p.trackPointIndex,
       distanceKm: p.distanceKm,
+      cpType: cpType === 'none' ? undefined : cpType,
     })
     dispatch({ type: 'HIDE_MARKER_INPUT' })
     setName('')
+    setCpType('none')
   }
 
   function cancel() {
     dispatch({ type: 'HIDE_MARKER_INPUT' })
     setName('')
+    setCpType('none')
   }
 
   return (
@@ -298,8 +346,31 @@ function MarkerInputOverlay() {
           onKeyDown={e => { if (e.key === 'Enter') confirm(); if (e.key === 'Escape') cancel() }}
           placeholder="如：危险下坡、取水点"
           autoFocus
-          className="w-full bg-[#f5f5f7] dark:bg-[#3a3a3c] rounded-lg px-3 h-10 text-sm text-[#1d1d1f] dark:text-white border border-transparent focus:border-accent-400 outline-none placeholder:text-[#aeaeb2] mb-3"
+          className="w-full bg-[#f5f5f7] dark:bg-[#3a3a3c] rounded-lg px-3 h-10 text-sm text-[#1d1d1f] dark:text-white border border-transparent focus:border-accent-400 outline-none placeholder:text-[#aeaeb2] mb-2"
         />
+        <div className="mb-3">
+          <p className="text-[10px] text-[#86868b] dark:text-[#8e8e93] mb-1.5">标记类型</p>
+          <div className="flex rounded-lg bg-[#f5f5f7] dark:bg-[#2c2c2e] p-0.5">
+            {([
+              ['none', '📍', '普通标记'],
+              ['light', '💧', '简易水站'],
+              ['full', '🏁', '大站换装点'],
+            ] as const).map(([key, emoji, label]) => (
+              <button
+                key={key}
+                type="button"
+                onClick={() => setCpType(key)}
+                className={`flex-1 py-1.5 rounded-md text-center transition-colors ${
+                  cpType === key
+                    ? 'bg-white dark:bg-[#3a3a3c] text-accent-600 dark:text-accent-400 shadow-sm'
+                    : 'text-[#aeaeb2] dark:text-[#636366]'
+                }`}
+              >
+                <span className="block text-[11px] font-medium">{emoji} {label}</span>
+              </button>
+            ))}
+          </div>
+        </div>
         <div className="flex gap-2">
           <button
             type="button" onClick={cancel}
@@ -320,13 +391,22 @@ function MarkerInputOverlay() {
 function CustomMarkers() {
   const { state, dispatch } = useTrail()
   const markers = state.customMarkers ?? []
+  const pts = state.result?.trackPoints ?? state.trackPoints
 
-  return <>{markers.map(m => (
-    <Marker key={m.id} position={[m.lat, m.lon]} icon={flagIcon}>
+  return <>{markers.map(m => {
+    const cmEle = pts[m.trackPointIndex]?.ele
+    const cpIconRender = m.cpType === 'full' ? fullCpIcon : m.cpType === 'light' ? lightCpIcon : flagIcon
+    const cpLabel = m.cpType === 'full' ? '🏁 大站' : m.cpType === 'light' ? '💧 水站' : null
+    return (
+    <Marker key={m.id} position={[m.lat, m.lon]} icon={cpIconRender}>
       <Popup>
         <div className="text-xs">
-          <div className="font-semibold mb-1">{m.name}</div>
-          <div className="text-[#86868b]">{m.distanceKm.toFixed(1)}km</div>
+          <div className="font-semibold mb-1">
+            {cpLabel && <span className="text-[10px] text-accent-500 mr-1">{cpLabel}</span>}
+            {m.name}
+          </div>
+          <div className="text-[#86868b]">距起点: {m.distanceKm.toFixed(1)}km</div>
+          {cmEle != null && <div className="text-[11px] text-[#86868b]">海拔: {Math.round(cmEle)}m</div>}
           <button
             type="button"
             onClick={() => dispatch({ type: 'DELETE_CUSTOM_MARKER', id: m.id })}
@@ -335,7 +415,8 @@ function CustomMarkers() {
         </div>
       </Popup>
     </Marker>
-  ))}</>
+    )
+  })}</>
 }
 
 // ---- main map component ----
@@ -343,15 +424,42 @@ export default function MapView() {
   const { state } = useTrail()
   const { theme } = useTheme()
   const points = state.result?.trackPoints ?? state.trackPoints
-  const [isMobile, setIsMobile] = useState(() => window.innerWidth < 768)
   const isDark = theme === 'dark'
 
+  // ---- offline tile download ----
+  const [caching, setCaching] = useState(false)
+  const [cacheProgress, setCacheProgress] = useState<{ done: number; total: number } | null>(null)
+  const [cacheDone, setCacheDone] = useState(false)
+  const [showCacheHint, setShowCacheHint] = useState(true)
+  const [cacheStats, setCacheStats] = useState<{ count: number; sizeMB: number } | null>(null)
+
   useEffect(() => {
-    const mq = window.matchMedia('(max-width: 767px)')
-    const handler = (e: MediaQueryListEvent) => setIsMobile(e.matches)
-    mq.addEventListener('change', handler)
-    return () => mq.removeEventListener('change', handler)
+    getCacheStats().then(setCacheStats)
   }, [])
+
+  const handleDownloadTiles = useCallback(async () => {
+    if (caching || points.length < 2) return
+    const lats = points.map(p => p.lat)
+    const lons = points.map(p => p.lon)
+    const minLat = Math.min(...lats) - 0.02
+    const maxLat = Math.max(...lats) + 0.02
+    const minLon = Math.min(...lons) - 0.02
+    const maxLon = Math.max(...lons) + 0.02
+
+    const keys = tileKeysForBounds(minLat, maxLat, minLon, maxLon, 12, 16)
+    setCaching(true)
+    setCacheProgress({ done: 0, total: keys.length })
+
+    const { cached } = await downloadTiles(keys, TILE_URL,
+      (done, total) => setCacheProgress({ done, total }),
+    )
+
+    setCacheProgress(null)
+    setCaching(false)
+    setCacheDone(true)
+    getCacheStats().then(setCacheStats)
+    setTimeout(() => setCacheDone(false), 3000)
+  }, [caching, points])
 
   if (points.length === 0) return null
 
@@ -362,9 +470,16 @@ export default function MapView() {
         className="w-full h-full"
         zoomControl={false}
         attributionControl={false}
-        dragging={!isMobile}
+        dragging={true}
       >
-        <TileLayer url={isDark ? TILE_URL_DARK : TILE_URL_LIGHT} attribution={TILE_ATTR} />
+        <TileLayer url={TILE_URL} attribution={TILE_ATTR} maxNativeZoom={18} maxZoom={22} />
+        <TileLayer
+          url="https://{s}.tile.opentopomap.org/{z}/{x}/{y}.png"
+          attribution={'&copy; <a href="https://opentopomap.org">OpenTopoMap</a>'}
+          opacity={0.35}
+          maxNativeZoom={17}
+          maxZoom={22}
+        />
         <GradientTrack />
         <DirectionArrows />
         <StartEndMarkers />
@@ -374,14 +489,42 @@ export default function MapView() {
         <FitBounds />
       </MapContainer>
 
-      {/* Mobile hint overlay */}
-      {isMobile && (
-        <div className="absolute bottom-2 left-1/2 -translate-x-1/2 z-[1001] pointer-events-none">
-          <span className="bg-black/50 backdrop-blur text-white text-[10px] px-3 py-1 rounded-full whitespace-nowrap">
-            👆 双指移动地图
-          </span>
-        </div>
-      )}
+      {/* Offline tile download button — bottom-right, touch-friendly */}
+      <div className="absolute bottom-4 right-2 z-[1000] flex flex-col items-end gap-1 pointer-events-auto">
+        {showCacheHint && !caching && !cacheDone && (
+          <button
+            type="button"
+            onClick={() => setShowCacheHint(false)}
+            className="text-[10px] px-2 py-1 rounded-full bg-black/60 backdrop-blur text-white/60 hover:text-white"
+          >
+            {cacheStats ? `${cacheStats.count} tiles (${cacheStats.sizeMB}MB)` : '无离线缓存'} ✕
+          </button>
+        )}
+
+        {caching && cacheProgress && (
+          <div className="text-[10px] px-2.5 py-1 rounded-full bg-black/70 backdrop-blur text-white">
+            缓存地图: {Math.round(cacheProgress.done / cacheProgress.total * 100)}%
+          </div>
+        )}
+
+        {cacheDone && (
+          <div className="text-[10px] px-2.5 py-1 rounded-full bg-green-600/80 backdrop-blur text-white">
+            ✓ 离线就绪
+          </div>
+        )}
+
+        <button
+          type="button"
+          onClick={handleDownloadTiles}
+          disabled={caching}
+          className="w-11 h-11 rounded-xl bg-accent-500 text-white flex items-center justify-center shadow-lg hover:bg-accent-600 disabled:opacity-50 transition-colors active:scale-95"
+          title="下载离线地图"
+        >
+          <svg className="w-5 h-5" fill="none" viewBox="0 0 24 24" stroke="currentColor" strokeWidth={2}>
+            <path strokeLinecap="round" strokeLinejoin="round" d="M4 16v2a2 2 0 002 2h12a2 2 0 002-2v-2M7 10l5 5 5-5M12 15V3" />
+          </svg>
+        </button>
+      </div>
 
       {/* Custom marker name input overlay */}
       <MarkerInputOverlay />

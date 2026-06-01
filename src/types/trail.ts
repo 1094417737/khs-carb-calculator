@@ -19,6 +19,7 @@ export interface UserProfile {
   targetTimeMinutes: number
   tempC: number
   weightKg: number
+  gutTolerance: 'low' | 'medium' | 'high'  // 肠胃碳水适应度
 }
 
 /** 自定义补给品 */
@@ -89,6 +90,7 @@ export interface CustomMarker {
   lat: number
   lon: number
   distanceKm: number
+  cpType?: 'light' | 'full'  // CP 点类型：简易水站 / 大站换装点
 }
 
 export type TrailStep = 'upload' | 'configure' | 'results'
@@ -97,6 +99,7 @@ export type TrailStep = 'upload' | 'configure' | 'results'
 export interface TrailState {
   gpxFileName: string
   trackPoints: TrackPoint[]
+  rawGpxText: string | null        // 上传的原始 GPX 文本，用于无损导出
   userProfile: UserProfile
   nutritionLibrary: NutritionItem[]
   waypointConfig: WaypointConfig
@@ -107,10 +110,11 @@ export interface TrailState {
   distanceOverrideKm: number | null
   climbOverrideM: number | null
   pendingMarkerInput: { lat: number; lon: number; trackPointIndex: number; distanceKm: number } | null
+  activeWaypointId: string | null
 }
 
 export type TrailAction =
-  | { type: 'SET_TRACK_POINTS'; fileName: string; points: TrackPoint[] }
+  | { type: 'SET_TRACK_POINTS'; fileName: string; points: TrackPoint[]; rawGpxText: string | null; importedMarkers?: CustomMarker[] }
   | { type: 'SET_USER_PROFILE'; profile: Partial<UserProfile> }
   | { type: 'SET_NUTRITION_LIBRARY'; items: NutritionItem[] }
   | { type: 'ADD_NUTRITION_ITEM'; item: NutritionItem }
@@ -121,11 +125,13 @@ export type TrailAction =
   | { type: 'SET_RESULT'; result: TrailResult }
   | { type: 'MOVE_WAYPOINT'; id: string; lat: number; lon: number }
   | { type: 'DELETE_WAYPOINT'; id: string }
-  | { type: 'ADD_CUSTOM_MARKER'; id: string; name: string; lat: number; lon: number; trackPointIndex: number; distanceKm: number }
+  | { type: 'UPDATE_WAYPOINT_ITEM'; wpId: string; itemId: string; delta: number }
+  | { type: 'ADD_CUSTOM_MARKER'; id: string; name: string; lat: number; lon: number; trackPointIndex: number; distanceKm: number; cpType?: 'light' | 'full' }
   | { type: 'DELETE_CUSTOM_MARKER'; id: string }
   | { type: 'SET_DISTANCE_OVERRIDE'; value: number | null }
   | { type: 'SET_CLIMB_OVERRIDE'; value: number | null }
   | { type: 'SET_ITEM_ACTIVE'; id: string }
   | { type: 'SHOW_MARKER_INPUT'; lat: number; lon: number; trackPointIndex: number; distanceKm: number }
   | { type: 'HIDE_MARKER_INPUT' }
+  | { type: 'SET_ACTIVE_WAYPOINT'; id: string | null }
   | { type: 'RESET' }

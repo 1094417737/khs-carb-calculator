@@ -1,4 +1,4 @@
-import React, { createContext, useContext, useReducer, useEffect, type ReactNode } from 'react'
+import React, { createContext, useContext, useReducer, useEffect, useRef, type ReactNode } from 'react'
 import type { TrailState, TrailAction, TrailResult } from '../types/trail'
 import { computeTrail } from '../engine/trail'
 import { defaultNutritionLibrary } from '../engine/trail/nutrition'
@@ -42,7 +42,8 @@ const saved = loadConfig()
 const initialState: TrailState = {
   gpxFileName: '',
   trackPoints: [],
-  userProfile: saved?.userProfile ?? { targetTimeMinutes: 240, tempC: 20, weightKg: 65 },
+  rawGpxText: null,
+  userProfile: saved?.userProfile ?? { targetTimeMinutes: 240, tempC: 20, weightKg: 65, gutTolerance: 'low' },
   nutritionLibrary: saved?.nutritionLibrary ?? defaultNutritionLibrary(),
   waypointConfig: saved?.waypointConfig ?? {
     searchWindowMinutes: 10,
@@ -60,12 +61,13 @@ const initialState: TrailState = {
   distanceOverrideKm: null,
   climbOverrideM: null,
   pendingMarkerInput: null,
+  activeWaypointId: null,
 }
 
 function reducer(state: TrailState, action: TrailAction): TrailState {
   switch (action.type) {
     case 'SET_TRACK_POINTS':
-      return { ...state, gpxFileName: action.fileName, trackPoints: action.points, result: null, step: 'configure', customMarkers: [], distanceOverrideKm: null, climbOverrideM: null, pendingMarkerInput: null }
+      return { ...state, gpxFileName: action.fileName, trackPoints: action.points, rawGpxText: action.rawGpxText, result: null, step: 'configure', customMarkers: action.importedMarkers ?? [], distanceOverrideKm: null, climbOverrideM: null, pendingMarkerInput: null }
 
     case 'SET_USER_PROFILE':
       return { ...state, userProfile: { ...state.userProfile, ...action.profile } }
@@ -127,8 +129,31 @@ function reducer(state: TrailState, action: TrailAction): TrailState {
       return { ...state, result: { ...state.result, waypoints: state.result.waypoints.filter(w => w.id !== action.id) } }
     }
 
+    case 'UPDATE_WAYPOINT_ITEM': {
+      if (!state.result) return state
+      return {
+        ...state,
+        result: {
+          ...state.result,
+          waypoints: state.result.waypoints.map(wp => {
+            if (wp.id !== action.wpId) return wp
+            return {
+              ...wp,
+              items: wp.items
+                .map(item =>
+                  item.itemId === action.itemId
+                    ? { ...item, quantity: Math.max(0, item.quantity + action.delta) }
+                    : item
+                )
+                .filter(item => item.quantity > 0),
+            }
+          }),
+        },
+      }
+    }
+
     case 'ADD_CUSTOM_MARKER': {
-      const cm = { id: action.id, name: action.name, lat: action.lat, lon: action.lon, trackPointIndex: action.trackPointIndex, distanceKm: action.distanceKm }
+      const cm = { id: action.id, name: action.name, lat: action.lat, lon: action.lon, trackPointIndex: action.trackPointIndex, distanceKm: action.distanceKm, cpType: action.cpType }
       return { ...state, customMarkers: [...state.customMarkers, cm] }
     }
 
@@ -147,6 +172,9 @@ function reducer(state: TrailState, action: TrailAction): TrailState {
     case 'HIDE_MARKER_INPUT':
       return { ...state, pendingMarkerInput: null }
 
+    case 'SET_ACTIVE_WAYPOINT':
+      return { ...state, activeWaypointId: action.id }
+
     case 'RESET':
       return { ...initialState, userProfile: state.userProfile, waypointConfig: state.waypointConfig, nutritionLibrary: state.nutritionLibrary }
 
@@ -159,27 +187,34 @@ const TrailContext = createContext<{ state: TrailState; dispatch: React.Dispatch
 
 export function TrailProvider({ children }: { children: ReactNode }) {
   const [state, dispatch] = useReducer(reducer, initialState)
+  const calcTimer = useRef<ReturnType<typeof setTimeout> | null>(null)
 
   useEffect(() => { saveConfig(state) }, [state.userProfile, state.waypointConfig, state.nutritionLibrary, state.safeMode])
 
-  // 自动计算 — 任何参数变化都触发重算
+  // 自动计算 — 防抖 300ms，避免快速连续输入引发密集重算
   useEffect(() => {
     if (state.trackPoints.length < 2) return
 
-    try {
-      const result: TrailResult = computeTrail({
-        points: state.trackPoints,
-        profile: state.userProfile,
-        waypointConfig: state.waypointConfig,
-        nutritionLibrary: state.nutritionLibrary,
-        distanceOverrideKm: state.distanceOverrideKm,
-        climbOverrideM: state.climbOverrideM,
-      })
-      dispatch({ type: 'SET_RESULT', result })
-    } catch (e) {
-      console.error('Trail 计算引擎异常:', e)
-    }
-  }, [state.trackPoints, state.userProfile, state.waypointConfig, state.nutritionLibrary, state.distanceOverrideKm, state.climbOverrideM])
+    if (calcTimer.current) clearTimeout(calcTimer.current)
+    calcTimer.current = setTimeout(() => {
+      try {
+        const result: TrailResult = computeTrail({
+          points: state.trackPoints,
+          profile: state.userProfile,
+          waypointConfig: state.waypointConfig,
+          nutritionLibrary: state.nutritionLibrary,
+          distanceOverrideKm: state.distanceOverrideKm,
+          climbOverrideM: state.climbOverrideM,
+          customMarkers: state.customMarkers,
+        })
+        dispatch({ type: 'SET_RESULT', result })
+      } catch (e) {
+        console.error('Trail 计算引擎异常:', e)
+      }
+    }, 300)
+
+    return () => { if (calcTimer.current) clearTimeout(calcTimer.current) }
+  }, [state.trackPoints, state.userProfile, state.waypointConfig, state.nutritionLibrary, state.distanceOverrideKm, state.climbOverrideM, state.customMarkers])
 
   return (
     <TrailContext.Provider value={{ state, dispatch }}>
