@@ -41,26 +41,26 @@ export default function TrailModule() {
 
       {/* User Profile + Nutrition Library — stack on mobile, side-by-side on desktop */}
       <div className="flex flex-col lg:flex-row gap-4">
-        <div className="flex-1"><UserProfilePanel /></div>
-        <div className="flex-1"><NutritionLibraryPanel /></div>
+        <div className="flex-1 min-w-0"><UserProfilePanel /></div>
+        <div className="flex-1 min-w-0"><NutritionLibraryPanel /></div>
       </div>
 
       {/* Map — 手机端硬核高度 280-320px，桌面端自适应 420px */}
-      <div className="relative rounded-2xl overflow-hidden" style={{ height: 'clamp(280px, 55vw, 420px)' }}>
+      <div className="relative rounded-2xl overflow-hidden w-full" style={{ height: 'clamp(280px, 55vw, 420px)' }}>
         <MapView />
       </div>
 
       <ElevationProfile />
       {/* PaceStrategy + GradientBreakdown — side-by-side desktop, stacked mobile */}
       <div className="flex flex-col lg:flex-row gap-4">
-        <div className="flex-1"><PaceStrategy /></div>
-        <div className="lg:w-56 shrink-0"><GradientBreakdown /></div>
+        <div className="flex-1 min-w-0 w-full"><PaceStrategy /></div>
+        <div className="w-full lg:w-56 lg:shrink-0"><GradientBreakdown /></div>
       </div>
 
       {/* WaypointList + ExportPanel — stack on mobile, ExportPanel 吸底 */}
       <div className="flex flex-col lg:flex-row gap-4 pb-6 sm:pb-0">
-        <div className="flex-1"><WaypointList /></div>
-        <div className="lg:w-64 shrink-0 sm:sticky sm:bottom-4 sm:self-end"><ExportPanel /></div>
+        <div className="flex-1 min-w-0 w-full"><WaypointList /></div>
+        <div className="w-full lg:w-64 lg:shrink-0 sm:sticky sm:bottom-4 sm:self-end"><ExportPanel /></div>
       </div>
     </div>
   )

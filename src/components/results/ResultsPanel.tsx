@@ -4,7 +4,6 @@ import Card from '../layout/Card'
 import CarbResultView from './CarbResultView'
 import FluidResultView from './FluidResultView'
 import SodiumResultView from './SodiumResultView'
-// import CaffeinePlanView from './CaffeinePlanView'
 import FeedingScheduleView from './FeedingScheduleView'
 import ProductComparisonView from './ProductComparisonView'
 import HomemadeMixView from './HomemadeMixView'
@@ -59,11 +58,6 @@ export default function ResultsPanel() {
       <ProductComparisonView />
       <HomemadeMixView />
 
-      {/* 咖啡因方案（隐藏）
-      <CaffeinePlanView />
-      */}
-
-      {/* 补给时间表 */}
       <FeedingScheduleView />
     </div>
   )

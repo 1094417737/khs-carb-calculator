@@ -1,5 +1,4 @@
 import Card from '../layout/Card'
-// import CaffeineToggle from './CaffeineToggle'
 import HomemadeToggle from './HomemadeToggle'
 import RatioSelector from './RatioSelector'
 import CommercialSelector from './CommercialSelector'
@@ -12,8 +11,6 @@ export default function StrategyPanel() {
     <Card className="animate-slide-up">
       <h2 className="section-title">补给策略</h2>
       <div className="space-y-5">
-        {/* <CaffeineToggle />
-        <div className="h-px bg-black/5 dark:bg-white/8" /> */}
         <HomemadeToggle />
         {strategyOptions.useHomemade ? (
           <div className="animate-fade-in">

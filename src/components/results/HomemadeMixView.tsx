@@ -295,7 +295,7 @@ export default function HomemadeMixView() {
           </div>
           <div className="flex items-start gap-2">
             <span className="text-emerald-500 shrink-0">3</span>
-            <span>水 <strong>{mix.waterMlTotal}ml</strong> ({(mix.waterMlTotal / 1000).toFixed(1)}L){strategyOptions.useCaffeine ? ' + 咖啡因片' : ''}</span>
+            <span>水 <strong>{mix.waterMlTotal}ml</strong> ({(mix.waterMlTotal / 1000).toFixed(1)}L){/* 咖啡因策略已全局隐藏 */}</span>
           </div>
           <div className="flex items-start gap-2">
             <span className="text-emerald-500 shrink-0">4</span>

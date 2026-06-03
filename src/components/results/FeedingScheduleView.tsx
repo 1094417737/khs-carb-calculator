@@ -70,7 +70,7 @@ export default function FeedingScheduleView() {
                       <span>碳水 {item.carbs}g</span>
                       <span>补水 {item.fluid}ml</span>
                       {item.sodium > 0 && <span>钠 {item.sodium}mg</span>}
-                      {item.caffeine && <span className="text-amber-500">☕ {item.caffeine}mg</span>}
+                      {/* 咖啡因策略已全局隐藏 */}
                     </div>
                   </div>
                 </div>
