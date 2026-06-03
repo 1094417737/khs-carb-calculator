@@ -1,5 +1,11 @@
 {
-  "rewrites": [{ "source": "/(.*)", "destination": "/" }],
+  "cleanUrls": true,
+  "rewrites": [
+    {
+      "source": "/((?!assets/|registerSW|manifest|favicon|sw\\.).*)",
+      "destination": "/"
+    }
+  ],
   "headers": [
     {
       "source": "/index.html",
