@@ -107,9 +107,15 @@ export default defineConfig(({ mode }) => ({
     } as import('vite').Plugin,
   ],
 
+  base: './',
+
   build: {
+    emptyOutDir: true,
     rollupOptions: {
       output: {
+        entryFileNames: 'assets/[name]-[hash].js',
+        chunkFileNames: 'assets/[name]-[hash].js',
+        assetFileNames: 'assets/[name]-[hash].[ext]',
         // 将 engine 目录代码拆分为独立 chunk，精准混淆
         manualChunks(id) {
           if (id.includes('/engine/') && !id.includes('__tests__')) {
