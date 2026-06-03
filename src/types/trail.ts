@@ -58,8 +58,6 @@ export interface Waypoint {
 /** 补给策略配置 */
 export interface WaypointConfig {
   searchWindowMinutes: number   // 搜索窗口, default 10
-  mergeTimeMin: number          // 合并阈值(分钟), default 5
-  mergeDistanceM: number        // 合并阈值(米), default 300
   cooldownMinutes: number       // 最小补给间隔, default 35
   gelMaxPerStop: number         // 单次胶上限, default 2
   saltMaxPerStop: number        // 单次盐丸上限, default 3

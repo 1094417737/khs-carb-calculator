@@ -1,13 +1,26 @@
-import type { TrackPoint, UserProfile, WaypointConfig, NutritionItem, TrailResult } from '../../types/trail'
+import type { TrackPoint, UserProfile, WaypointConfig, NutritionItem, TrailResult, CustomMarker } from '../../types/trail'
 import { simplifyTrack, getTrailStats } from './gradient'
 import { applyGAP, totalTimeMinutes, equivalentFlatDistanceKm } from './gap'
 import { placeWaypoints } from './waypoint'
-import { kcalPerHour, sodiumMgPerHour, carbsGPerHour } from './nutrition'
+import { kcalPerHour, sodiumMgPerHour, carbsGPerHour, sweatRateLPerHour } from './nutrition'
 
 export { simplifyTrack, getTrailStats, categorizeGradient } from './gradient'
 export { applyGAP, totalTimeMinutes, equivalentFlatDistance, equivalentFlatDistanceKm } from './gap'
 export { placeWaypoints } from './waypoint'
-export { kcalPerHour, sodiumMgPerHour, carbsGPerHour, matchNutrition, defaultNutritionLibrary } from './nutrition'
+export {
+  kcalPerHour,
+  sodiumMgPerHour,
+  carbsGPerHour,
+  sweatRateLPerHour,
+  matchNutrition,
+  defaultNutritionLibrary,
+  gradientCarbMultiplier,
+  fatigueMultiplier,
+  computeTotalWorkload,
+  shouldTriggerSaltPill,
+  SWEAT_SALT_THRESHOLD_L,
+  FAT_EXEMPTION,
+} from './nutrition'
 
 export interface ComputeTrailInput {
   points: TrackPoint[]
@@ -17,6 +30,7 @@ export interface ComputeTrailInput {
   simplify?: boolean
   distanceOverrideKm?: number | null
   climbOverrideM?: number | null
+  customMarkers?: CustomMarker[]
 }
 
 export function computeTrail(input: ComputeTrailInput): TrailResult {
@@ -27,14 +41,26 @@ export function computeTrail(input: ComputeTrailInput): TrailResult {
     points = simplifyTrack(points, 500)
   }
 
-  const withGAP = applyGAP(points, input.profile)
-  const kcalH = kcalPerHour(input.profile.weightKg)
+  let withGAP = applyGAP(points, input.profile)
+  const kcalH = kcalPerHour(input.profile.weightKg, input.profile.tempC)
   const sodiumH = sodiumMgPerHour(input.profile.weightKg, input.profile.tempC)
-  const carbsH = carbsGPerHour(input.profile.weightKg)
-  const waypoints = placeWaypoints(withGAP, input.waypointConfig, input.nutritionLibrary, kcalH, sodiumH, carbsH)
+  const carbsH = carbsGPerHour(input.profile.weightKg, input.profile.gutTolerance, input.profile.tempC)
+
+  // 强制对齐：将 GAP 推算的累积耗时缩放到目标完赛时间
+  const gaptimeMin = totalTimeMinutes(withGAP)
+  const targetMin = input.profile.targetTimeMinutes
+  if (gaptimeMin > 0 && Math.abs(targetMin - gaptimeMin) > 1) {
+    const timeScale = targetMin / gaptimeMin
+    withGAP = withGAP.map((pt, i) =>
+      i === 0 ? pt : { ...pt, timeElapsed: Math.round(pt.timeElapsed * timeScale) }
+    )
+  }
+
+  const sweatH = sweatRateLPerHour(input.profile.weightKg, input.profile.tempC)
+  const waypoints = placeWaypoints(withGAP, input.waypointConfig, input.nutritionLibrary, kcalH, sodiumH, carbsH, sweatH, input.customMarkers)
   let totalDist = input.points.length > 0 ? input.points[input.points.length - 1].cumulativeDistanceKm : 0
   let eqDist = equivalentFlatDistanceKm(withGAP)
-  let timeMin = totalTimeMinutes(withGAP)
+  let timeMin = targetMin  // 强制使用目标完赛时间
   let gain = stats.elevationGainM
 
   if (input.climbOverrideM != null && gain > 0) {

@@ -36,6 +36,7 @@ export default function ElevationProfile() {
   const { theme } = useTheme()
   const points = state.result?.trackPoints
   const waypoints = state.result?.waypoints
+  const customMarkers = state.customMarkers
   const activeWaypointId = state.activeWaypointId
   const canvasRef = useRef<HTMLCanvasElement>(null)
   const lastMatchedWpId = useRef<string | null>(null)
@@ -180,10 +181,70 @@ export default function ElevationProfile() {
         ctx.setLineDash([]) // 重置为实线
       }
     }
+
+    // ---- 自定义标记 (customMarkers) ----
+    if (customMarkers && customMarkers.length > 0) {
+      for (const cm of customMarkers) {
+        const cmX = x(cm.distanceKm)
+        // 跳过超出绘制区域的标记
+        if (cmX < pad.left || cmX > w - pad.right) continue
+
+        // 插值查找该距离对应的海拔
+        let cmEle = elevations[0]
+        for (let i = 0; i < distances.length; i++) {
+          if (distances[i] >= cm.distanceKm) { cmEle = elevations[i]; break }
+          cmEle = elevations[i]
+        }
+        const cmY = y(cmEle)
+
+        const isActive = activeWaypointId === cm.id
+
+        // 垂直虚线贯穿剖面区域
+        ctx.beginPath()
+        ctx.setLineDash(isActive ? [4, 3] : [2, 5])
+        ctx.moveTo(cmX, pad.top)
+        ctx.lineTo(cmX, h - pad.bottom)
+        ctx.strokeStyle = isActive
+          ? 'rgba(255,204,0,0.55)'
+          : isDark ? 'rgba(255,255,255,0.15)' : 'rgba(0,0,0,0.12)'
+        ctx.lineWidth = isActive ? 1.5 : 0.5
+        ctx.stroke()
+        ctx.setLineDash([])
+
+        // 置顶标志牌
+        const emoji = cm.cpType === 'full' ? '🏁' : cm.cpType === 'light' ? '💧' : '🚩'
+        const label = cm.name.length > 6 ? cm.name.slice(0, 5) + '…' : cm.name
+        const fontSize = isActive ? 11 : 10
+        const text = `${emoji} ${label}`
+
+        ctx.font = `${fontSize}px -apple-system, "Segoe UI", sans-serif`
+        const textW = ctx.measureText(text).width
+
+        // 半透明背景胶囊
+        const bgH = fontSize + 6
+        const bgW = textW + 8
+        const bgX = cmX - bgW / 2
+        const bgY = pad.top + 1
+        ctx.fillStyle = isActive
+          ? 'rgba(255,204,0,0.25)'
+          : isDark ? 'rgba(0,0,0,0.5)' : 'rgba(255,255,255,0.7)'
+        ctx.beginPath()
+        ctx.roundRect(bgX, bgY, bgW, bgH, 4)
+        ctx.fill()
+
+        // 文字
+        ctx.fillStyle = isActive
+          ? '#ffcc00'
+          : isDark ? 'rgba(255,255,255,0.85)' : '#1d1d1f'
+        ctx.textAlign = 'center'
+        ctx.textBaseline = 'middle'
+        ctx.fillText(text, cmX, bgY + bgH / 2)
+      }
+    }
   }
 
   // 初始渲染
-  useEffect(() => { draw() }, [chartData, waypoints, isDark, activeWaypointId])
+  useEffect(() => { draw() }, [chartData, waypoints, customMarkers, isDark, activeWaypointId])
 
   // 屏幕旋转 / 窗口大小变化 → 重绘
   useEffect(() => {
@@ -191,7 +252,7 @@ export default function ElevationProfile() {
     const ro = new ResizeObserver(() => draw())
     ro.observe(canvasRef.current)
     return () => ro.disconnect()
-  }, [chartData, waypoints, isDark, activeWaypointId])
+  }, [chartData, waypoints, customMarkers, isDark, activeWaypointId])
 
   // ---- interactive tooltip ----
   const [tooltip, setTooltip] = useState<{
@@ -287,7 +348,7 @@ export default function ElevationProfile() {
         <canvas
           ref={canvasRef}
           className="w-full cursor-crosshair"
-          style={{ height: '150px', touchAction: 'none' }}
+          style={{ height: 'clamp(180px, 30vh, 240px)', touchAction: 'none' }}
           onMouseMove={handlePointer}
           onMouseLeave={hideTooltip}
           onTouchMove={handlePointer}

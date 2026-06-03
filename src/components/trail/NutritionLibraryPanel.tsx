@@ -8,9 +8,9 @@ export default function NutritionLibraryPanel() {
   const library = state.nutritionLibrary
 
   const [name, setName] = useState('')
-  const [kcal, setKcal] = useState(111)
-  const [sodium, setSodium] = useState(84)
-  const [carbs, setCarbs] = useState(27)
+  const [kcalStr, setKcalStr] = useState('111')
+  const [sodiumStr, setSodiumStr] = useState('84')
+  const [carbsStr, setCarbsStr] = useState('27')
   const [itemType, setItemType] = useState<NutritionItem['type']>('gel')
 
   function handleAdd() {
@@ -21,9 +21,9 @@ export default function NutritionLibraryPanel() {
         id: `nut_${Date.now()}_${Math.random().toString(36).slice(2, 8)}`,
         type: itemType,
         name: name.trim(),
-        kcal,
-        sodiumMg: sodium,
-        carbsG: carbs,
+        kcal: parseInt(kcalStr, 10) || 0,
+        sodiumMg: parseInt(sodiumStr, 10) || 0,
+        carbsG: parseInt(carbsStr, 10) || 0,
         isActive: false, // reducer 会自动判定是否激活
       },
     })
@@ -59,25 +59,28 @@ export default function NutritionLibraryPanel() {
           <div>
             <label className="text-[10px] text-[#86868b] dark:text-[#8e8e93] block mb-0.5">kcal</label>
             <input
-              type="number" inputMode="decimal" min={0} value={kcal}
-              onChange={e => setKcal(Number(e.target.value))}
-              className="w-full bg-white dark:bg-[#3a3a3c] rounded-lg px-1.5 h-10 text-sm text-[#1d1d1f] dark:text-white border border-transparent focus:border-accent-300 outline-none [appearance:textfield]"
+              type="text" inputMode="decimal" value={kcalStr}
+              onChange={e => setKcalStr(e.target.value)}
+              onBlur={() => { if (kcalStr.trim() === '' || isNaN(parseInt(kcalStr, 10))) setKcalStr('111') }}
+              className="w-full bg-white dark:bg-[#3a3a3c] rounded-lg px-1.5 h-10 text-sm text-[#1d1d1f] dark:text-white border border-transparent focus:border-accent-300 outline-none"
             />
           </div>
           <div>
             <label className="text-[10px] text-[#86868b] dark:text-[#8e8e93] block mb-0.5">碳水g</label>
             <input
-              type="number" inputMode="decimal" min={0} value={carbs}
-              onChange={e => setCarbs(Number(e.target.value))}
-              className="w-full bg-white dark:bg-[#3a3a3c] rounded-lg px-1.5 h-10 text-sm text-[#1d1d1f] dark:text-white border border-transparent focus:border-accent-300 outline-none [appearance:textfield]"
+              type="text" inputMode="decimal" value={carbsStr}
+              onChange={e => setCarbsStr(e.target.value)}
+              onBlur={() => { if (carbsStr.trim() === '' || isNaN(parseInt(carbsStr, 10))) setCarbsStr('27') }}
+              className="w-full bg-white dark:bg-[#3a3a3c] rounded-lg px-1.5 h-10 text-sm text-[#1d1d1f] dark:text-white border border-transparent focus:border-accent-300 outline-none"
             />
           </div>
           <div>
             <label className="text-[10px] text-[#86868b] dark:text-[#8e8e93] block mb-0.5">钠mg</label>
             <input
-              type="number" inputMode="decimal" min={0} value={sodium}
-              onChange={e => setSodium(Number(e.target.value))}
-              className="w-full bg-white dark:bg-[#3a3a3c] rounded-lg px-1.5 h-10 text-sm text-[#1d1d1f] dark:text-white border border-transparent focus:border-accent-300 outline-none [appearance:textfield]"
+              type="text" inputMode="decimal" value={sodiumStr}
+              onChange={e => setSodiumStr(e.target.value)}
+              onBlur={() => { if (sodiumStr.trim() === '' || isNaN(parseInt(sodiumStr, 10))) setSodiumStr('84') }}
+              className="w-full bg-white dark:bg-[#3a3a3c] rounded-lg px-1.5 h-10 text-sm text-[#1d1d1f] dark:text-white border border-transparent focus:border-accent-300 outline-none"
             />
           </div>
           <div>
@@ -133,18 +136,19 @@ export default function NutritionLibraryPanel() {
               </span>
               <div className="flex-1 min-w-0">
                 <span className="text-sm font-medium text-[#1d1d1f] dark:text-white">{item.name}</span>
-                <span className="text-[11px] text-[#aeaeb2] ml-2">{typeLabel[item.type]}</span>
+                <span className="text-xs text-[#aeaeb2] ml-2">{typeLabel[item.type]}</span>
                 {item.isActive && (
-                  <span className="text-[10px] text-accent-500 ml-1 font-medium">已激活</span>
+                  <span className="text-[11px] text-accent-500 ml-1 font-medium">已激活</span>
                 )}
+                <span className="block sm:hidden text-[11px] text-[#86868b] font-mono mt-0.5">{item.kcal}kcal · {item.carbsG}g · {item.sodiumMg}mg</span>
               </div>
               <span className="text-[11px] text-[#86868b] font-mono hidden sm:inline">{item.kcal}kcal</span>
               <span className="text-[11px] text-[#86868b] font-mono hidden sm:inline">{item.carbsG}g</span>
-              <span className="text-[11px] text-[#86868b] font-mono">{item.sodiumMg}mg</span>
+              <span className="text-[11px] text-[#86868b] font-mono hidden sm:inline">{item.sodiumMg}mg</span>
               <button
                 type="button"
                 onClick={() => handleDelete(item.id)}
-                className="min-w-[32px] min-h-[32px] rounded-full bg-[#e8e8ed] dark:bg-[#3a3a3c] flex items-center justify-center text-sm text-[#86868b] hover:bg-red-100 hover:text-red-500 transition-colors shrink-0"
+                className="min-w-[36px] min-h-[36px] rounded-full bg-[#e8e8ed] dark:bg-[#3a3a3c] flex items-center justify-center text-sm text-[#86868b] hover:bg-red-100 hover:text-red-500 active:scale-90 transition-all shrink-0"
               >
                 ✕
               </button>

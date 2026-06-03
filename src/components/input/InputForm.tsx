@@ -19,13 +19,24 @@ export default function InputForm() {
   const hours = Math.floor(planInputs.durationMinutes / 60)
   const minutes = planInputs.durationMinutes % 60
 
-  // 动态计算算法推荐碳水目标（与引擎一致）
+  // ═══ 硬改：前端手动计算器碳水目标 — FAT_EXEMPTION 35% 脂肪豁免直接焊死为 ×0.65 ═══
   const defaultCarbTarget = useMemo(() => {
     const base = BASE_CARB_RANGE[planInputs.hrZone]
     const mod = GI_CARB_MODIFIER[planInputs.giTraining]
     const elev = elevationCarbModifier(planInputs.elevationGainM ?? 0, planInputs.durationMinutes)
-    return Math.round(base.rec * mod.rec * elev)
-  }, [planInputs.hrZone, planInputs.giTraining, planInputs.elevationGainM, planInputs.durationMinutes])
+    // 体重缩放（BASE_CARB_RANGE 按 65kg 校准）
+    const weightScale = Math.max(0.5, Math.min(2.0, planInputs.weightKg / 65))
+    let target = Math.round(base.rec * mod.rec * elev * 0.65 * weightScale) // ← 硬编码 35% FatMax 脂肪豁免，不可绕过
+    // 高温碳水加速：23-28°C 线性 +2%/°C，>28°C 极限应激 ×1.10
+    if (planInputs.tempC > 23) {
+      if (planInputs.tempC > 28) {
+        target = Math.round(target * 1.10)
+      } else {
+        target = Math.round(target * (1 + (planInputs.tempC - 23) * 0.02))
+      }
+    }
+    return target
+  }, [planInputs.hrZone, planInputs.giTraining, planInputs.elevationGainM, planInputs.durationMinutes, planInputs.weightKg, planInputs.tempC])
 
   const handleModeChange = (mode: SportMode) => {
     setSportMode(mode)

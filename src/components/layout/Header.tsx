@@ -14,16 +14,16 @@ export default function Header({ mode, onModeChange }: HeaderProps) {
 
   return (
     <header className="sticky top-0 z-50 bg-[#f2f2f7]/80 dark:bg-black/80 backdrop-blur-xl border-b border-black/5 dark:border-white/10">
-      <div className="max-w-[880px] mx-auto px-4 sm:px-6 lg:px-8 h-14 flex items-center justify-between">
-        <div className="flex items-center gap-3">
-          <div className="w-8 h-8 rounded-xl bg-gradient-to-br from-accent-500 to-accent-700 flex items-center justify-center">
+      <div className="max-w-[880px] mx-auto px-3 sm:px-6 lg:px-8 h-14 flex items-center justify-between">
+        <div className="flex items-center gap-2 sm:gap-3">
+          <div className="w-8 h-8 rounded-xl bg-gradient-to-br from-accent-500 to-accent-700 flex items-center justify-center shrink-0">
             <span className="text-white font-bold text-sm">E</span>
           </div>
           <div>
-            <h1 className="text-[15px] font-semibold text-[#1d1d1f] dark:text-white leading-none">
+            <h1 className="text-[13px] sm:text-[15px] font-semibold text-[#1d1d1f] dark:text-white leading-none">
               KHS智能补给规划
             </h1>
-            <p className="text-[11px] text-[#86868b] dark:text-[#8e8e93] leading-none mt-0.5 hidden sm:block">
+            <p className="text-[10px] sm:text-[11px] text-[#86868b] dark:text-[#8e8e93] leading-none mt-0.5 hidden sm:block">
               基于运动科学的个性化补给方案
             </p>
           </div>

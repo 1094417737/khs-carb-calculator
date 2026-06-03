@@ -17,7 +17,9 @@ export function calculate(inputs: CalculatorInputs): CalculationResult {
     plan.giTraining,
     plan.durationMinutes,
     plan.elevationGainM,
-    plan.customCarbTarget && plan.customCarbTarget > 0 ? plan.customCarbTarget : undefined
+    plan.customCarbTarget && plan.customCarbTarget > 0 ? plan.customCarbTarget : undefined,
+    plan.tempC,
+    plan.weightKg
   )
 
   // 自制模式：糖浆比例决定碳水吸收上限（双通道转运原理）
@@ -33,7 +35,8 @@ export function calculate(inputs: CalculatorInputs): CalculationResult {
     plan.giTraining,
     plan.durationMinutes,
     plan.elevationGainM,
-    plan.cyclingEnabled ? plan.cyclingWind : undefined
+    plan.cyclingEnabled ? plan.cyclingWind : undefined,
+    plan.sweatRateProfile
   )
 
   const sodium = calculateSodium(
@@ -83,7 +86,7 @@ export function calculate(inputs: CalculatorInputs): CalculationResult {
   )
 
   const homemadeMix = strategy.useHomemade
-    ? calculateHomemadeMix(strategy.homemadeRatio, carbs.gramsPerHour.recommended, plan.durationMinutes, plan.giTraining)
+    ? calculateHomemadeMix(strategy.homemadeRatio, carbs.gramsPerHour.recommended, plan.durationMinutes, plan.giTraining, fluid.mlPerHour.recommended, fluid.totalMl)
     : undefined
 
   const schedule = generateSchedule(

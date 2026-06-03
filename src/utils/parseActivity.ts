@@ -3,7 +3,7 @@
  */
 import FitParser from 'fit-file-parser'
 import JSZip from 'jszip'
-import type { TrackPoint } from '../types/trail'
+import type { TrackPoint, CustomMarker } from '../types/trail'
 
 export interface ParsedActivity {
   durationMinutes: number
@@ -33,27 +33,72 @@ export function getAcceptString(): string {
   return SUPPORTED_EXTENSIONS.join(',')
 }
 
+/**
+ * 扫描 GPX <wpt> 节点，识别 KHS_MARKER 标识并还原为 CustomMarker[]
+ * 解析失败不影响轨迹解析，静默丢弃无效条目
+ */
+export function parseKhsMarkersFromGpx(xmlText: string): CustomMarker[] {
+  try {
+    const parser = new DOMParser()
+    const doc = parser.parseFromString(xmlText, 'text/xml')
+    if (doc.querySelector('parsererror')) return []
+
+    const wptNodes = doc.querySelectorAll('wpt')
+    const markers: CustomMarker[] = []
+
+    wptNodes.forEach((wpt) => {
+      const lat = parseFloat(wpt.getAttribute('lat') || '')
+      const lon = parseFloat(wpt.getAttribute('lon') || '')
+      if (isNaN(lat) || isNaN(lon)) return
+
+      const descEl = wpt.querySelector('desc')
+      const desc = descEl?.textContent || ''
+      const match = desc.match(/\[KHS_MARKER:(FULL|LIGHT|FLAG)\]/)
+      if (!match) return
+
+      const typeTag = match[1]
+      const cpType = typeTag === 'FULL' ? 'full' : typeTag === 'LIGHT' ? 'light' : undefined as 'full' | 'light' | undefined
+      const name = desc.replace(/\s*\[KHS_MARKER:.*?\]\s*/, '').trim() || '导入标记'
+
+      markers.push({
+        id: `khs_import_${Date.now()}_${Math.random().toString(36).slice(2, 6)}`,
+        name,
+        lat,
+        lon,
+        trackPointIndex: -1,
+        distanceKm: 0,
+        cpType,
+      })
+    })
+
+    return markers
+  } catch {
+    return []
+  }
+}
+
 /** 统一解析入口：根据文件后缀分发到对应解析器 */
-export async function parseFile(file: File): Promise<TrackPoint[]> {
+export async function parseFile(file: File): Promise<{ points: TrackPoint[]; rawText: string | null; importedMarkers: CustomMarker[] }> {
   const fileName = file.name
   const ext = fileName.substring(fileName.lastIndexOf('.')).toLowerCase()
 
   switch (ext) {
     case '.gpx': {
       const text = await file.text()
-      return parseGpxToTrackPoints(text)
+      const importedMarkers = parseKhsMarkersFromGpx(text)
+      return { points: parseGpxToTrackPoints(text), rawText: text, importedMarkers }
     }
     case '.fit': {
       const buf = await file.arrayBuffer()
-      return parseFitToTrackPoints(buf)
+      return { points: await parseFitToTrackPoints(buf), rawText: null, importedMarkers: [] }
     }
     case '.kml': {
       const text = await file.text()
-      return parseKmlFile(text, fileName)
+      return { points: parseKmlFile(text, fileName), rawText: null, importedMarkers: [] }
     }
     case '.kmz': {
       const buf = await file.arrayBuffer()
-      return parseKmzFile(buf, fileName)
+      return { points: await parseKmzFile(buf, fileName), rawText: null, importedMarkers: [] }
     }
     default:
       throw new Error(`不支持的文件格式: ${ext}，支持: ${SUPPORTED_EXTENSIONS.join(', ')}`)

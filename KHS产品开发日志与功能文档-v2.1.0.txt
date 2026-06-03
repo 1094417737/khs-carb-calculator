@@ -1,0 +1,226 @@
+================================================================================
+  KHS 越野战术大脑 — 产品开发日志与功能文档
+  版本：v2.1.0
+  发布日期：2026-06-01 13:12 CST
+  线上地址：https://khs-fuel-planner.pages.dev
+================================================================================
+
+【版本演进】
+  v1.0.0  基础碳水计算器
+  v2.0.0  Trail 补给规划模块上线 + 百度统计接入
+  v2.1.0  CP 点智能扣减 + 双向联动 + 引擎混淆 + UI 跃升（当前版本）
+
+
+================================================================================
+  一、产品概述
+================================================================================
+
+KHS 越野战术大脑 是一款面向越野跑运动员的智能补给规划工具。
+用户上传 GPX 轨迹文件后，系统基于运动生理学模型（ACSM 2016、
+Jeukendrup 2014、Sawka 2007）自动计算赛道各段的热量消耗、钠流失、
+碳水需求，并在轨迹上生成最优补给航点推荐。
+
+支持桌面端（大屏地图+剖面协同分析）和移动端（触控优化、PWA 离线）。
+
+
+================================================================================
+  二、核心功能模块
+================================================================================
+
+2.1 GPX 轨迹解析
+  - 支持标准 GPX 1.1 格式
+  - 自动提取经纬度、海拔、累计距离
+  - 轨迹简化（Ramer-Douglas-Peucker 变体，目标 500 点）
+  - Haversine 距离重算 + 坡度计算
+
+2.2 运动生理学引擎
+  - 热量消耗：MET 7.5 × 体重(kg)，基线 488 kcal/h (65kg)
+  - 钠流失：出汗率模型（温度+体重修正），汗液钠浓度 500mg/L
+  - 碳水需求：0.6g/kg/h，钳制 30-90g/h，肠胃适应度修正
+  - GAP 等效平路距离换算（梯度→配速修正因子）
+
+2.3 补给航点生成
+  - 基于时间区块 + 冷却期（默认 35min）的累积缺口模型
+  - 单点吸收上限：≤2 能量胶 + ≤3 盐丸 + ≤45g 碳水
+  - 15 分钟内平路优先打点（scorePoint 评分系统）
+  - CP 点（官方补给站）智能感知扣减系统
+
+2.4 CP 点智能感知扣减系统（v2.1.0 新增）
+  - 大站（full）：累积缺口 × 0.45（选手通常会在 CP 充分补给）
+  - 水站（light）：累积缺口 × 0.80（仅补水，少量补充）
+  - 250m Haversine 吸附容差（适应轨迹简化后的距离偏移）
+  - CP 命中后强制重置 35min 冷却期
+  - 未被覆盖的缺口顺延至后续区块
+
+2.5 地图可视化（Leaflet + OpenTopoMap）
+  - 坡度分段着色轨迹线（紫红=上坡、青蓝=下坡、暖沙=平路）
+  - 方向箭头（每 800m 标注行进方向）
+  - 起终点特殊标记（S/E）
+  - 补给航点标记（能量胶⚡、盐丸💧、混合⚡💧）
+  - 自定义标记系统（普通标记🚩、水站💧、大站🏁）
+  - 离线地图缓存（PWA，支持 z12-16 缩放级）
+
+2.6 海拔剖面图（Canvas 自绘）
+  - Catmull-Rom → 三次 Bezier 平滑曲线
+  - 坡度分段着色（与地图配色统一）
+  - 移动端自动降采样（100 点 vs 桌面 300 点）
+  - 触控滑动 Tooltip（距离/海拔/坡度/ETA 实时显示）
+  - 补给航点三角标记 + 自定义标记虚线+置顶标志牌
+  - 联动高亮参考线（金色虚线贯穿剖面）
+
+2.7 地图-剖面双向联动（v2.1.0 新增）
+  - 点击地图航点 → 剖面图淡出旧焦点，高亮目标三角 + 垂直参考线
+  - 剖面图滑动悬停 → 地图 Marker 自动打开 Popup + 视口平移至目标中央
+  - 活跃航点三角 1.5x 放大 + 金色发光
+  - 自定义标记联动：命中时虚线变亮 + 标志牌微放大
+
+2.8 补给品管理系统
+  - 默认补给库：能量胶（111 kcal / 27g 碳水 / 84mg 钠）
+                    盐丸（0 kcal / 0g 碳水 / 280mg 钠）
+  - 支持自定义添加/编辑/删除补给品
+  - 同类型互斥激活机制（gel/salt/solid 各保持一项 active）
+  - 配置持久化（localStorage）
+
+2.9 用户画像与赛道覆盖
+  - 目标完赛时间、环境温度、体重、肠胃碳水适应度
+  - 距离/爬升手动覆盖（应对 GPX 数据不准确）
+  - 安全模式（减量 20% 的保守推荐）
+
+2.10 导出功能
+  - GPX 导出（含补给航点 waypoint）
+  - TCX 导出（Garmin 兼容，含 Course 结构）
+  - GPX 原始文本无损保留与导出
+
+2.11 PWA 离线支持
+  - Service Worker 预缓存（Workbox，43 个静态资源）
+  - 离线地图瓦片缓存（CacheFirst，最大 2000 张，30 天有效期）
+  - Web App Manifest（可添加至手机主屏幕）
+  - 离线就绪状态指示
+
+2.12 引擎代码混淆（v2.1.0 新增）
+  - 仅混淆生产构建的 src/engine/**/*.ts
+  - 域名锁：khs-fuel-planner.pages.dev
+  - 标识符十六进制化 + Base64 字符串数组 + Self-Defending
+  - 禁用 console 输出
+  - 关闭性能杀手选项（controlFlowFlattening / numbersToExpressions
+    / deadCodeInjection 均 OFF）
+  - 实现方式：Vite generateBundle 阶段精准注入，不污染开发模式
+
+
+================================================================================
+  三、技术栈
+================================================================================
+
+  前端框架：React 18 + TypeScript
+  构建工具：Vite 5
+  地图引擎：Leaflet + react-leaflet v4
+  图表渲染：原生 Canvas 2D（无第三方图表库）
+  混淆工具：javascript-obfuscator v4.2.2
+  PWA：vite-plugin-pwa (Workbox)
+  测试：Vitest
+  部署：Cloudflare Pages
+
+
+================================================================================
+  四、项目结构
+================================================================================
+
+  src/
+  ├── engine/trail/          # 核心计算引擎（混淆目标）
+  │   ├── index.ts           # computeTrail 主入口
+  │   ├── gradient.ts        # 轨迹简化、坡度计算、统计
+  │   ├── gap.ts             # GAP 等效平路换算
+  │   ├── nutrition.ts       # 生理消耗模型 + 补给匹配
+  │   └── waypoint.ts        # 航点生成 + CP 扣减
+  ├── context/
+  │   └── TrailContext.tsx    # 全局状态 (useReducer + localStorage)
+  ├── components/trail/
+  │   ├── TrailModule.tsx     # 主模块入口
+  │   ├── MapView.tsx         # 地图可视化（Leaflet）
+  │   ├── ElevationProfile.tsx # 海拔剖面图（Canvas）
+  │   ├── GpxUploader.tsx     # GPX 上传
+  │   ├── UserProfilePanel.tsx # 用户画像配置
+  │   ├── WaypointList.tsx    # 航点列表
+  │   ├── NutritionLibraryPanel.tsx # 补给品管理
+  │   ├── GradientBreakdown.tsx # 坡度段分析
+  │   ├── PaceStrategy.tsx    # 配速策略
+  │   └── ExportPanel.tsx     # GPX/TCX 导出
+  ├── types/
+  │   └── trail.ts            # 全类型定义
+  ├── utils/
+  │   ├── colorScale.ts       # 坡度→颜色映射
+  │   ├── parseActivity.ts    # GPX 解析
+  │   └── tileCache.ts        # 离线瓦片缓存
+  └── hooks/
+      └── useTrail.ts         # Context 封装 Hook
+
+
+================================================================================
+  五、科学参考文献
+================================================================================
+
+  - ACSM 2016 Position Stand (Thomas DT et al.)
+    Nutrition and Athletic Performance. Med Sci Sports Exerc. 48(3):543-568.
+  - Jeukendrup AE (2014) A Step Towards Personalized Sports Nutrition:
+    Carbohydrate Intake During Exercise. Sports Med. 44(Suppl 1):S25-S33.
+  - Sawka MN et al. (2007) ACSM Position Stand: Exercise and Fluid
+    Replacement. Med Sci Sports Exerc. 39(2):377-390.
+  - Ainsworth BE et al. (2011) Compendium of Physical Activities.
+    Med Sci Sports Exerc. 43(8):1575-1581.
+  - Maughan RJ, Shirreffs SM (2012) Hydration and Performance.
+    Scand J Med Sci Sports. 22(Suppl 1):5-13.
+
+
+================================================================================
+  六、v2.1.0 变更清单
+================================================================================
+
+  新增功能：
+  ✅ CP 点智能感知扣减系统（大站 55% off / 水站 20% off）
+  ✅ 地图-剖面双向联动高亮（点击 + 滑动）
+  ✅ 地图视口自动跟随（panTo 平滑动画）
+  ✅ 海拔剖面图自定义标记渲染（虚线 + 置顶标志牌）
+  ✅ 引擎代码混淆（域名锁 + Self-Defending）
+  ✅ 平路坡度颜色从灰白更新为暖沙 (#e6bf9a)
+
+  Bug 修复：
+  🔧 CP 点匹配脱靶：吸附容差 100m→250m，严格 < 改为 <=
+  🔧 simplifyTrack→recomputeDistances Haversine 弦长误差导致距离偏移
+
+  文件变更：
+  修改：src/engine/trail/waypoint.ts (CP 容差 + 调试日志)
+  修改：src/engine/trail/index.ts (出口声明)
+  修改：src/engine/trail/nutrition.ts (出口声明)
+  修改：src/engine/trail/gradient.ts (出口声明)
+  修改：src/engine/trail/export-gpx.ts (出口声明)
+  修改：src/engine/trail/export-tcx.ts (出口声明)
+  修改：src/components/trail/MapView.tsx (联动 + panTo + ref)
+  修改：src/components/trail/ElevationProfile.tsx (联动 + customMarkers)
+  修改：src/components/trail/TrailModule.tsx
+  修改：src/components/trail/GpxUploader.tsx
+  修改：src/components/trail/UserProfilePanel.tsx
+  修改：src/components/trail/WaypointList.tsx
+  修改：src/components/trail/NutritionLibraryPanel.tsx
+  修改：src/components/trail/ExportPanel.tsx
+  修改：src/components/vip/DeviceGuideModal.tsx
+  修改：src/utils/colorScale.ts (平路颜色)
+  修改：src/utils/parseActivity.ts
+  修改：src/types/trail.ts (activeWaypointId 字段)
+  修改：src/context/TrailContext.tsx (activeWaypointId 状态)
+  修改：vite.config.ts (引擎混淆插件)
+  新增：src/components/trail/GradientBreakdown.tsx
+  新增：src/components/trail/PaceStrategy.tsx
+  新增：src/utils/tileCache.ts
+
+
+================================================================================
+  七、部署信息
+================================================================================
+
+  平台：Cloudflare Pages
+  域名：https://khs-fuel-planner.pages.dev
+  部署方式：Wrangler CLI Direct Upload (--branch=master)
+  构建命令：tsc -b && vite build
+  输出目录：dist/
+  PWA 预缓存：43 个静态资源 (16.7 MB)
+  离线瓦片：CacheFirst，最大 2000 张，30 天 TTL

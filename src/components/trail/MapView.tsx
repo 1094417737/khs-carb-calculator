@@ -188,12 +188,15 @@ function WaypointMarkers() {
   const pts = state.result?.trackPoints ?? state.trackPoints
   const activeId = state.activeWaypointId
   const markerRefs = useRef<Map<string, L.Marker>>(new Map())
+  const map = useMap()
 
-  // 当 activeWaypointId 变化时，自动打开对应 marker 的 Popup
+  // 当 activeWaypointId 变化时，自动打开对应 marker 的 Popup 并平移视口
   useEffect(() => {
     if (activeId && markerRefs.current.has(activeId)) {
       const marker = markerRefs.current.get(activeId)!
       setTimeout(() => marker.openPopup(), 50)
+      const wp = waypoints.find(w => w.id === activeId)
+      if (wp) map.panTo([wp.lat, wp.lon], { animate: true })
     }
   }, [activeId])
 

@@ -1,5 +1,19 @@
 import type { HRZone, GITrainingLevel, HomemadeRatio } from '../types'
 
+// ============================================================
+// 脂肪最大氧化豁免率 (FatMax Exemption)
+//
+// 基于 Jeukendrup (2014) 脂肪最大氧化理论:
+// 耐力运动中人体脂肪承担约 35% 的能量供给，
+// 该部分无需外源碳水补充，直接从源头削减基线。
+//
+// ⚠️ 单一定义，焊死在所有底层系数中，不可绕过。
+//    所有碳水/热量计算必须从此处引用。
+//
+// 参考: Jeukendrup AE (2014) Sports Med. 44(Suppl 1):S25-S33.
+// ============================================================
+export const FAT_EXEMPTION = 0.35
+
 /** HR 区间中文描述 */
 export const HR_ZONE_LABELS: Record<HRZone, string> = {
   '50-60': '恢复 / 热身',
@@ -16,13 +30,13 @@ export const GI_TRAINING_LABELS: Record<GITrainingLevel, string> = {
   Well: '适应性强 — 可耐受较高碳水摄入和大量液体',
 }
 
-/** 碳水基础范围 (g/h) — 按 HR 区间 */
+/** 碳水基础范围 (g/h) — 按 HR 区间 — 对齐 0.6g/kg/h 基线 (65kg 参考) */
 export const BASE_CARB_RANGE: Record<HRZone, { low: number; rec: number; high: number }> = {
-  '50-60':  { low: 20, rec: 30, high: 40 },
-  '60-70':  { low: 30, rec: 45, high: 55 },
-  '70-80':  { low: 45, rec: 60, high: 75 },
-  '80-90':  { low: 60, rec: 75, high: 90 },
-  '90-100': { low: 40, rec: 55, high: 70 },
+  '50-60':  { low: 15, rec: 20, high: 28 },
+  '60-70':  { low: 22, rec: 35, high: 42 },
+  '70-80':  { low: 35, rec: 50, high: 58 },
+  '80-90':  { low: 45, rec: 60, high: 70 },
+  '90-100': { low: 30, rec: 40, high: 52 },
 }
 
 /** GI 训练水平对碳水的调节系数 */

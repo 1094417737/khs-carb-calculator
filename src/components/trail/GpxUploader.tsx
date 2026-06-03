@@ -27,12 +27,12 @@ export default function GpxUploader() {
 
     setParsing(true)
     try {
-      const points = await parseFile(file)
+      const { points, rawText, importedMarkers } = await parseFile(file)
       if (points.length < MIN_POINTS) {
         setError(`轨迹点过少（${points.length}个），无法进行有效计算。请上传包含至少${MIN_POINTS}个轨迹点的标准越野跑 GPX/FIT 文件。`)
         return
       }
-      dispatch({ type: 'SET_TRACK_POINTS', fileName: file.name, points })
+      dispatch({ type: 'SET_TRACK_POINTS', fileName: file.name, points, rawGpxText: rawText, importedMarkers })
       trackUpload(file.name, file.size)
     } catch (e: any) {
       setError(e?.message || '文件解析失败，请检查文件完整性')

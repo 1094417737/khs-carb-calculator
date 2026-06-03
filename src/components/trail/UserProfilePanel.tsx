@@ -1,4 +1,4 @@
-import { useState, useCallback } from 'react'
+import { useState, useCallback, useEffect } from 'react'
 import { useTrail } from '../../hooks/useTrail'
 import Card from '../layout/Card'
 
@@ -10,25 +10,22 @@ export default function UserProfilePanel() {
   const hours = Math.floor(totalMin / 60)
   const minutes = totalMin % 60
 
-  function setHours(h: number) {
-    dispatch({ type: 'SET_USER_PROFILE', profile: { targetTimeMinutes: h * 60 + minutes } })
-  }
-  function setMinutes(m: number) {
-    dispatch({ type: 'SET_USER_PROFILE', profile: { targetTimeMinutes: hours * 60 + m } })
-  }
-  function setTempC(v: number) {
-    dispatch({ type: 'SET_USER_PROFILE', profile: { tempC: v } })
-  }
-  function setWeight(v: number) {
-    dispatch({ type: 'SET_USER_PROFILE', profile: { weightKg: v } })
-  }
+  // 本地字符串态：允许用户全选删除，onBlur 时校验并提交
+  const [hoursStr, setHoursStr] = useState(String(hours))
+  const [minutesStr, setMinutesStr] = useState(String(minutes))
+  const [tempStr, setTempStr] = useState(String(p.tempC))
+  const [weightStr, setWeightStr] = useState(String(p.weightKg))
+  useEffect(() => { setHoursStr(String(Math.floor(p.targetTimeMinutes / 60))) }, [p.targetTimeMinutes])
+  useEffect(() => { setMinutesStr(String(p.targetTimeMinutes % 60)) }, [p.targetTimeMinutes])
+  useEffect(() => { setTempStr(String(p.tempC)) }, [p.tempC])
+  useEffect(() => { setWeightStr(String(p.weightKg)) }, [p.weightKg])
 
   const tooShort = result ? result.totalDistanceKm < 0.1 : true
 
   return (
     <Card padding="md">
       <h3 className="text-sm font-semibold text-[#1d1d1f] dark:text-white mb-3">运动参数</h3>
-      <div className="grid grid-cols-3 gap-2 sm:gap-3">
+      <div className="grid grid-cols-3 gap-1.5 sm:gap-3">
         {/* 目标完赛 */}
         <div>
           <label className="text-[10px] sm:text-[11px] text-[#86868b] dark:text-[#8e8e93] uppercase block mb-1">
@@ -36,15 +33,25 @@ export default function UserProfilePanel() {
           </label>
           <div className="flex items-center gap-0.5 bg-[#f5f5f7] dark:bg-[#2c2c2e] rounded-lg px-2 h-11">
             <input
-              type="number" inputMode="decimal" min={0} max={48} value={hours}
-              onChange={e => setHours(Math.max(0, Number(e.target.value)))}
-              className="w-8 bg-transparent text-center font-mono text-base font-semibold text-[#1d1d1f] dark:text-white outline-none [appearance:textfield]"
+              type="text" inputMode="decimal" value={hoursStr}
+              onChange={e => setHoursStr(e.target.value)}
+              onBlur={() => {
+                const n = parseInt(hoursStr, 10)
+                if (isNaN(n)) setHoursStr(String(Math.floor(p.targetTimeMinutes / 60)))
+                else dispatch({ type: 'SET_USER_PROFILE', profile: { targetTimeMinutes: Math.max(0, Math.min(48, n)) * 60 + (p.targetTimeMinutes % 60) } })
+              }}
+              className="w-8 bg-transparent text-center font-mono text-base font-semibold text-[#1d1d1f] dark:text-white outline-none"
             />
             <span className="text-[11px] text-[#aeaeb2]">h</span>
             <input
-              type="number" inputMode="decimal" min={0} max={59} value={minutes}
-              onChange={e => setMinutes(Math.max(0, Math.min(59, Number(e.target.value))))}
-              className="w-8 bg-transparent text-center font-mono text-base font-semibold text-[#1d1d1f] dark:text-white outline-none [appearance:textfield]"
+              type="text" inputMode="decimal" value={minutesStr}
+              onChange={e => setMinutesStr(e.target.value)}
+              onBlur={() => {
+                const n = parseInt(minutesStr, 10)
+                if (isNaN(n)) setMinutesStr(String(p.targetTimeMinutes % 60))
+                else dispatch({ type: 'SET_USER_PROFILE', profile: { targetTimeMinutes: Math.floor(p.targetTimeMinutes / 60) * 60 + Math.max(0, Math.min(59, n)) } })
+              }}
+              className="w-8 bg-transparent text-center font-mono text-base font-semibold text-[#1d1d1f] dark:text-white outline-none"
             />
             <span className="text-[11px] text-[#aeaeb2]">m</span>
           </div>
@@ -55,9 +62,14 @@ export default function UserProfilePanel() {
           </label>
           <div className="flex items-center gap-1 bg-[#f5f5f7] dark:bg-[#2c2c2e] rounded-lg px-2 h-11">
             <input
-              type="number" inputMode="decimal" min={-20} max={50} value={p.tempC}
-              onChange={e => setTempC(Number(e.target.value))}
-              className="w-12 bg-transparent text-center font-mono text-base font-semibold text-[#1d1d1f] dark:text-white outline-none [appearance:textfield]"
+              type="text" inputMode="decimal" value={tempStr}
+              onChange={e => setTempStr(e.target.value)}
+              onBlur={() => {
+                const n = parseInt(tempStr, 10)
+                if (isNaN(n)) setTempStr(String(p.tempC))
+                else dispatch({ type: 'SET_USER_PROFILE', profile: { tempC: Math.max(-20, Math.min(50, n)) } })
+              }}
+              className="w-12 bg-transparent text-center font-mono text-base font-semibold text-[#1d1d1f] dark:text-white outline-none"
             />
             <span className="text-[11px] text-[#aeaeb2]">°C</span>
           </div>
@@ -68,16 +80,66 @@ export default function UserProfilePanel() {
           </label>
           <div className="flex items-center gap-1 bg-[#f5f5f7] dark:bg-[#2c2c2e] rounded-lg px-2 h-11">
             <input
-              type="number" inputMode="decimal" min={30} max={150} value={p.weightKg}
-              onChange={e => setWeight(Number(e.target.value))}
-              className="w-12 bg-transparent text-center font-mono text-base font-semibold text-[#1d1d1f] dark:text-white outline-none [appearance:textfield]"
+              type="text" inputMode="decimal" value={weightStr}
+              onChange={e => setWeightStr(e.target.value)}
+              onBlur={() => {
+                const n = parseInt(weightStr, 10)
+                if (isNaN(n)) setWeightStr(String(p.weightKg))
+                else dispatch({ type: 'SET_USER_PROFILE', profile: { weightKg: Math.max(30, Math.min(150, n)) } })
+              }}
+              className="w-12 bg-transparent text-center font-mono text-base font-semibold text-[#1d1d1f] dark:text-white outline-none"
             />
             <span className="text-[11px] text-[#aeaeb2]">kg</span>
           </div>
         </div>
       </div>
 
-      {/* ===== 路线总览数据（融合自 MapDashboard） ===== */}
+      {/* 肠胃适应度 */}
+      <div className="mt-3">
+        <label className="text-[10px] sm:text-[11px] text-[#86868b] dark:text-[#8e8e93] uppercase block mb-1.5">
+          肠胃碳水适应度
+        </label>
+        <p className="text-[9px] text-[#aeaeb2] dark:text-[#636366] leading-relaxed -mt-0.5 mb-1.5">
+          💡 肠胃适应度作为高耗能段的最高安全防线，严防高渗呕吐
+        </p>
+        <div className="flex rounded-lg bg-[#f5f5f7] dark:bg-[#2c2c2e] p-0.5">
+          {([
+            ['low', '低', '保守减量'],
+            ['medium', '中', '常规拉练'],
+            ['high', '高', '极限冲锋'],
+          ] as const).map(([key, label, sub]) => (
+            <button
+              key={key}
+              type="button"
+              onClick={() => dispatch({ type: 'SET_USER_PROFILE', profile: { gutTolerance: key } })}
+              className={`flex-1 py-1.5 rounded-md text-center transition-colors ${
+                p.gutTolerance === key
+                  ? 'bg-white dark:bg-[#3a3a3c] text-accent-600 dark:text-accent-400 shadow-sm'
+                  : 'text-[#aeaeb2] dark:text-[#636366]'
+              }`}
+            >
+              <span className="block text-[12px] font-medium leading-tight">{label}</span>
+              <span className="block text-[9px] leading-tight opacity-60">{sub}</span>
+            </button>
+          ))}
+        </div>
+      </div>
+
+      {/* ===== 路线总览数据 ===== */}
+      {state.trackPoints.length > 0 && (
+        <a
+          href={`https://uri.amap.com/marker?position=${state.trackPoints[0].lon},${state.trackPoints[0].lat}&name=越野跑起点`}
+          target="_blank"
+          rel="noopener noreferrer"
+          className="mt-2 flex items-center justify-center gap-1.5 w-full h-9 rounded-lg bg-accent-500 text-white text-[12px] font-medium hover:bg-accent-600 transition-colors"
+        >
+          <svg className="w-4 h-4" fill="none" viewBox="0 0 24 24" stroke="currentColor" strokeWidth={2}>
+            <path strokeLinecap="round" strokeLinejoin="round" d="M17.657 16.657L13.414 20.9a2 2 0 01-2.828 0l-4.243-4.243a8 8 0 1111.314 0z" />
+            <path strokeLinecap="round" strokeLinejoin="round" d="M15 11a3 3 0 11-6 0 3 3 0 016 0z" />
+          </svg>
+          导航到起点
+        </a>
+      )}
       {result && (
         <>
           <hr className="border-t border-black/10 dark:border-white/10 my-3" />
@@ -103,7 +165,7 @@ export default function UserProfilePanel() {
               color="text-[#ff00ff]"
             />
             <StatItem label="等效平地" value={tooShort ? '0.0 km' : `${result.equivalentFlatDistanceKm.toFixed(1)} km`} />
-            <StatItem label="预估耗时" value={tooShort ? formatTime(state.userProfile.targetTimeMinutes) : formatTime(result.totalTimeMinutes)} />
+            <StatItem label="预估耗时" value={formatTime(state.userProfile.targetTimeMinutes)} />
             <StatItem label="累计下降" value={`-${result.elevationLossM} m`} color="text-[#00ffff]" />
             <StatItem label="平均配速" value={tooShort ? '-:--/km' : formatPace(result.totalTimeMinutes / result.totalDistanceKm)} />
           </div>

@@ -22,7 +22,7 @@ export default function App() {
         <TrailProvider>
           <div className="min-h-screen flex flex-col">
             <Header mode={mode} onModeChange={setMode} />
-            <main className="flex-1 py-6 sm:py-10">
+            <main className="flex-1 py-4 sm:py-10">
               <Container>
                 {mode === 'calculator' ? (
                   <div className="space-y-5">

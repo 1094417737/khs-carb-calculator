@@ -51,7 +51,6 @@ export function generateTcxWithCoursePoints(
   lines.push('      </Track>')
 
   for (const wp of waypoints) {
-    // Name: 始终使用 ASCII 短名
     const name = safeEnglishName(wp)
     const notes = safeMode
       ? wp.items.map(i => `${safeEnglishName(wp)} x${i.quantity}`).join(', ')
@@ -70,7 +69,6 @@ export function generateTcxWithCoursePoints(
     )
   }
 
-  // Custom user markers
   if (customMarkers && customMarkers.length > 0) {
     for (let i = 0; i < customMarkers.length; i++) {
       const cm = customMarkers[i]

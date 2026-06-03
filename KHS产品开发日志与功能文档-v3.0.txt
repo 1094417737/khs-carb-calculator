@@ -1,0 +1,453 @@
+================================================================
+  KHS 智能补给规划 — 产品开发日志与功能文档 v3.0
+================================================================
+
+上线地址：https://khs-fuel-planner.pages.dev
+项目名称：khs-fuel-planner
+代码仓库：E:\哈苏耐力计算器版本迭代\哈苏耐力加油计算器claude
+文档生成日期：2026-06-01
+
+================================================================
+  一、产品定位
+================================================================
+
+面向越野跑/超级马拉松/耐力运动爱好者的「赛事级战术规划工具」。
+上传 GPX/FIT/KML/KMZ 轨迹文件后，系统自动完成：
+
+  - 坡度感知配速推算（GAP / Naismith's Rule 类算法）
+  - 智能补给航点寻路（35min 冷却期 + 评分机制 + 补给匹配）
+  - 地图可视化（坡度热力渐变轨道 + 等高线地形 + 方向箭头）
+  - 交互式海拔剖面图（触摸滑动查看逐点数据）
+  - 分段配速策略建议 + 坡度分布统计
+  - 导出带语义化航点的手表兼容文件（GPX / TCX）
+  - PWA 离线支持 + 地图瓦片预缓存（深山断网可用）
+
+纯前端 MVP，所有计算在浏览器完成，零网络请求。
+支持独立安装到手机桌面（PWA standalone）。
+
+================================================================
+  二、技术栈
+================================================================
+
+前端框架：     React 18 + TypeScript 5.6
+样式方案：     Tailwind CSS 3.4
+构建工具：     Vite 5.4
+地图引擎：     Leaflet 1.9 + react-leaflet 4.2
+图表：         HTML5 Canvas（海拔剖面图）
+文件解析：     DOMParser (GPX/KML)、fit-file-parser (FIT)、JSZip (KMZ)
+离线方案：     vite-plugin-pwa 1.3 + Workbox Service Worker + IndexedDB 瓦片缓存
+部署平台：     Cloudflare Pages
+统计埋点：     百度统计 (hm.js)
+
+运行时依赖：   leaflet, react-leaflet, chart.js, react-chartjs-2,
+               fit-file-parser, jszip
+
+================================================================
+  三、完整功能清单
+================================================================
+
+【3.1 文件解析】
+  - 支持格式：GPX / FIT / KML / KMZ
+  - 拖拽上传，最大 10MB
+  - DOMParser 前端解析，逐点提取 lat/lon/ele/time
+  - 全文件高程缺失时自动填充上游值
+  - 解析后原始 GPX 文本完整保留（用于无损导出）
+
+【3.2 核心引擎】
+  - 坡度计算引擎 (gradient.ts)
+    · 逐点计算相邻轨迹点的高差与水平距离
+    · Ramer-Douglas-Peucker 轨迹简化算法（压缩至约 500 点）
+    · 五级坡度分类：陡下/缓下/平路/缓上/陡上
+
+  - GAP 时间推演引擎 (gap.ts)
+    · 等效平地距离计算：每爬升 100m = +1km
+    · 坡度配速系数：上坡 0-15% 线性减速至 55%
+    · 陡下坡（<-15%）刹车惩罚至 70%
+    · 缓下坡适度提速
+    · 强制对齐用户目标完赛时间（timeElapsed 等比缩放）
+
+  - 智能补给航点寻路 (waypoint.ts)
+    · 35 分钟最小冷却期
+    · ±10 分钟搜索窗口内选评分最高点
+    · 评分机制：平路 +50、上坡前 +30、长下坡前 +20、陡坡 -100
+    · 补给品匹配：优先胶填补热量+碳水，盐丸填补钠缺口
+    · 单点吸收上限：≤2 胶 + ≤3 盐丸 + ≤45g 碳水
+    · CP 点感知：接近官方 CP 站时自动清零累积缺口 + 重置冷却期
+    · 空匹配时冷却期不空转，缺口继续累积至下一点重试
+
+  - 生理消耗模型 (nutrition.ts)
+    · 热量：基于 ACSM MET 模型（MET=7.5, kcal/h = 体重×7.5）
+    · 碳水：基线 0.6g/kg/h, 钳制 30-90g/h（基于 Jeukendrup 2014）
+    · 钠：基于出汗率估算 + 汗液钠浓度（Sawka 2007）
+
+【3.3 地图可视化】
+  - CartoDB Voyager 暗色/亮色双主题底图
+  - OpenTopoMap 等高线地形叠加层（opacity 0.35）
+  - 多段渐变色轨迹线（紫红=上坡、青蓝=下坡、灰白=平路）
+  - 起终点标记（绿 S / 红 E）+ 方向箭头
+  - 补给航点标记（⚡能量胶/💧盐丸/⚡💧组合/🍫固体）
+  - 自定义打点（🚩普通标记/🏁CP 点标记）
+  - 点击地图吸附至最近轨迹点（100m Haversine 容差）
+  - 自定义打点弹窗（替代 window.prompt，含 CP 点开关）
+  - 手机端单指拖动 + 双指缩放
+  - 补给航点不可拖动（draggable=false）
+  - 离线瓦片下载按钮（右下角），预缓存 z12-16 瓦片到 IndexedDB
+
+【3.4 数据面板】
+  - 目标完赛时间输入（h + m）
+  - 气温/体重输入
+  - 导航到起点按钮（Google Maps 外链）
+  - 距离/累计爬升支持手动校准（点击数字即可编辑）
+  - 等效平地距离自动计算
+  - 预估耗时 = 用户目标完赛时间（强制同步）
+  - 累计下降、平均配速自动计算
+  - 代谢数据：kcal/h、碳水 g/h、钠 mg/h
+  - 💡 数据说明标注
+
+【3.5 补给库管理】
+  - 自定义添加/删除补给品（能量胶/盐丸/固体）
+  - 设置每件物品的 kcal、碳水克数、钠含量
+  - 同类型单选互斥激活（● 已激活 / ○ 未激活）
+  - 仅激活项参与补给计算
+  - 移动端优化：kcal/carbs/钠 折行显示
+
+【3.6 导出功能】
+  - GPX 导出（无损注入法）
+    · 保留原始 <trkpt> 中的 <ele>/<time>/<extensions> 节点
+    · <wpt> 节点注入至原始 GPX 的 </gpx> 之前
+    · 非 GPX 源（FIT/KML/KMZ）回退到重建模式
+  - TCX 导出（<CoursePoint> 航点）
+  - 语义化航点增强：
+    · <name> 含数量标注（如 GELx2+SALTx3）
+    · <sym> 映射：
+      - 营养航点：Food / Water / Food（胶+盐混合）
+      - 自定义标记：14 组关键词智能映射
+        CP→Pin, AS→Pin, WATER→Drinking Water, FOOD→Food,
+        MEDIC→First Aid, DANGER→Danger Area, PEAK→Summit,
+        BRIDGE→Bridge, TURN→Crossing, VIEW→Scenic Area,
+        BAG→Residence, WC→Restroom, POLES→Pin,
+        START→Flag Blue, FINISH→Flag Red
+    · 阿拉伯数字提取（如 CP3→CP-3）
+    · 纯 ASCII 名转大写
+    · 中文名无匹配回退为 WPT-N
+  - XML 控制字符过滤（\x00-\x08\x0B\x0C\x0E-\x1F）
+  - 航点计数器：>50 黄色警告、>100 红色警告
+  - 「英文安全航点名」开关
+
+【3.7 图表与数据分析】
+  - 交互式海拔剖面图（Canvas 渲染）
+    · Catmull-Rom 三次贝塞尔曲线平滑（tension 0.4）
+    · 暗色/亮色主题适配
+    · 移动端自动降采样至 100 点，桌面端 300 点
+    · 触摸/鼠标滑动实时 tooltip（距离/海拔/坡度/ETA）
+    · 补给航点在剖面上三角标记
+  - 分段配速策略卡片
+    · 自适应分段（4-8 段，每段约 5km）
+    · 每段显示：距离范围/平均坡度/推算配速/ETA/文字建议
+  - 坡度分布分析表
+    · 五级分类：陡上(>8%)/缓上(1-8%)/平路(-1~1%)/缓下(-8~-1%)/陡降(<-8%)
+    · 横条图可视化 + 公里数 + 百分比
+
+【3.8 航点交互】
+  - 补给航点列表（WaypointList）
+    · 类型筛选 pill：全部/⚡能量胶/💧盐丸
+    · 每项补给品 ± 编辑按钮（quantity 归零自动删除）
+    · 海拔显示（从原始 GPX <ele> 提取）
+    · 实战补给提示（CP 点官方补给说明）
+  - 地图 Popup 显示：距离/ETA/海拔/补给品
+
+【3.9 离线与 PWA】
+  - Service Worker 自动缓存（vite-plugin-pwa + Workbox）
+    · 地图瓦片独立缓存规则（CacheFirst, 2000 entries, 30 天）
+    · 预缓存 29 个静态资源（JS/CSS/HTML/SVG）
+    · 外部资源 NetworkFirst 兜底
+  - IndexedDB 瓦片预缓存引擎（tileCache.ts）
+    · 轨迹外扩 2 度范围 z12-16 瓦片预下载
+    · 进度条显示 + 已缓存统计
+    · 🏁 CP 点标记（🏁图标 + 算法扣减）
+
+【3.10 CP 点感知系统】
+  - 地图打点时勾选「🏁 标记为 CP 点」
+  - CP 点在地图上以 🏁 图标标记
+  - 算法在 CP 点位置（100m 容差）：
+    · 强制清零累积热量/碳水/钠缺口
+    · 重置 35 分钟冷却期
+    · 模拟跑者在 CP 站吃过官方补给
+
+【3.11 其他】
+  - 深浅色主题全站适配（Tailwind dark: 前缀）
+  - 响应式布局（mobile-first, flex-col lg:flex-row）
+  - 所有按钮 ≥ 44px 触控区
+  - localStorage 用户配置持久化（补给库、完赛时间、配置）
+  - 百度统计埋点 (hm.js c4f93b1dac6a0966cf1d04a57cf09e47)
+  - 两个 Tab 模式：补碳计算 / Trail 补给
+
+================================================================
+  四、文件结构
+================================================================
+
+项目根目录 E:\哈苏耐力计算器版本迭代\哈苏耐力加油计算器claude\
+
+src/
+├── main.tsx                          # 入口
+├── App.tsx                           # 模式切换（补碳计算 / Trail 补给）
+├── vite-env.d.ts                     # Window._hmt 类型声明
+│
+├── types/
+│   └── trail.ts                      # 全部类型定义（TrackPoint/Waypoint/CustomMarker/...）
+│
+├── engine/trail/
+│   ├── gradient.ts                   # 坡度计算 + Ramer-Douglas-Peucker 轨迹简化
+│   ├── gap.ts                        # GAP 时间推演引擎（等效平地 + 坡度配速系数）
+│   ├── waypoint.ts                   # 智能补给航点寻路（冷却期 + 评分 + CP 感知）
+│   ├── nutrition.ts                  # 生理消耗模型 + 补给匹配 + 默认补给库
+│   ├── export-gpx.ts                 # GPX 导出（无损注入 + 语义化 sym + 关键词映射）
+│   ├── export-tcx.ts                 # TCX 导出
+│   └── index.ts                      # 引擎编排（parse→GAP→waypoints→result）
+│
+├── context/
+│   └── TrailContext.tsx               # useReducer 全局状态 + localStorage 持久化
+│
+├── hooks/
+│   ├── useTrail.ts                   # useContext 便捷封装
+│   ├── useTheme.ts                   # 主题 hook
+│   └── useAnalytics.ts              # 埋点 hook
+│
+├── components/
+│   ├── layout/
+│   │   ├── Header.tsx                # Tab 切换
+│   │   └── Card.tsx                  # 通用卡片容器
+│   ├── trail/
+│   │   ├── TrailModule.tsx           # 主容器（布局编排）
+│   │   ├── GpxUploader.tsx           # 拖拽上传
+│   │   ├── UserProfilePanel.tsx      # 运动参数 + 数据面板 + 起点导航
+│   │   ├── NutritionLibraryPanel.tsx # 补给库管理
+│   │   ├── MapView.tsx               # Leaflet 地图（渐变轨迹 + 标记 + 离线下载）
+│   │   ├── ElevationProfile.tsx      # Canvas 交互式海拔剖面图
+│   │   ├── PaceStrategy.tsx          # 分段配速策略卡片
+│   │   ├── GradientBreakdown.tsx     # 坡度分布分析表
+│   │   ├── WaypointList.tsx          # 航点列表（筛选 + 编辑 + 海拔）
+│   │   ├── ExportPanel.tsx           # 导出面板
+│   │   └── DeviceGuideModal.tsx      # 手表导出指引弹窗
+│   └── vip/
+│       └── DeviceGuideModal.tsx
+│
+├── utils/
+│   ├── parseActivity.ts              # GPX/FIT/KML/KMZ 解析器
+│   ├── colorScale.ts                 # 坡度→颜色映射工具
+│   ├── tileCache.ts                  # IndexedDB 瓦片缓存引擎
+│   └── analytics.ts                  # localStorage 埋点存储
+│
+├── index.css                         # 全局样式 + Tailwind
+└── index.html                        # 入口 HTML + 百度统计注入
+
+根目录配置文件：
+├── package.json                      # 依赖清单
+├── vite.config.ts                    # Vite + PWA + Tailwind 配置
+├── tsconfig.json                     # TypeScript 配置
+├── tailwind.config.ts                # Tailwind 配置
+└── CLAUDE.md                         # 项目工作指引
+
+================================================================
+  五、关键算法详解
+================================================================
+
+【5.1 GAP 坡度配速系数 (gap.ts)】
+  基准：平路配速 = 目标完赛时间 / 等效平地距离
+  等效平地距离 = 实际距离 + 爬升/100 - 缓下坡/100×0.15 + 陡下坡×0.3/100
+
+  速度系数 speedMultiplier(gradient):
+    上坡 0-15%: 1.0 → 0.55 (线性递减)
+    上坡 >15%: 0.55 (步行)
+    平路 -3~0%: 1.0
+    缓下坡 -15~-3%: 1.0 → 1.2 (加速)
+    陡下坡 <-15%: 0.70 (刹车)
+
+【5.2 补给航点寻路 (waypoint.ts)】
+  输入：带 timeElapsed 的轨迹点 + 代谢率(kcal/min, 钠/min, 碳水/min)
+  输出：Waypoint[] 按距离排序
+
+  算法步骤：
+  1. 遍历轨迹点，逐分钟累积热量/钠/碳水缺口
+  2. 冷却期 >35min + 缺口 >半份胶热量 → 触发搜索
+  3. ±10min 窗口内找评分最高的点（评分函数见下）
+  4. 匹配补给品（胶优先→盐丸），受单点上限约束
+  5. 减去已覆盖缺口，剩余缺口顺延至下一区块
+  6. 遇到 CP 点：强制清零缺口 + 重置冷却期
+
+  评分函数 scorePoint():
+    平路(-3%~3%) +50
+    缓坡(-8%~8%) +25
+    陡坡(>15%或<-15%) -100
+    前方上坡 >10% +30
+    前方下坡 <-10% +20
+
+【5.3 生理消耗模型 (nutrition.ts)】
+  kcal/h = 体重(kg) × 7.5 (MET)
+  carbsG/h = clamp(体重×0.6, 30, 90)
+  sodiumMg/h = 0.5L/h出汗 × 500mg/L × 0.7 (补70%流失)
+               + 温度修正(>20°C加增量) + 体重修正(>70kg加增量)
+
+【5.4 GPX 无损注入导出 (export-gpx.ts)】
+  策略：不上传原始 GPX → 回退重建
+       上传原始 GPX → 保存 rawGpxText → 在 </gpx> 前注入 <wpt> 节点
+  红线：绝不修改 rawGpxText 中的 <trkpt> 及其子节点
+
+【5.5 轨迹简化 (gradient.ts)】
+  算法：Ramer-Douglas-Peucker
+  输入：TrackPoint[]（可含 10000+ 点）
+  输出：≈500 点
+  保留特征：拐弯处和大坡度变化处优先保留
+
+================================================================
+  六、状态管理架构
+================================================================
+
+TrailContext (useReducer) 全局状态：
+
+  TrailState:
+    gpxFileName: string           # 文件名
+    trackPoints: TrackPoint[]     # 轨迹点数组
+    rawGpxText: string | null     # 原始 GPX XML（无损导出用）
+    userProfile: {                # 用户画像
+      targetTimeMinutes: number
+      tempC: number
+      weightKg: number
+    }
+    nutritionLibrary: []          # 补给库
+    waypointConfig: {}            # 补给策略配置
+    result: TrailResult | null    # 计算结果
+    step: TrailStep               # 当前步骤 (upload|configure|results)
+    safeMode: boolean             # 英文安全名开关
+    customMarkers: []             # 自定义标记（含 isCheckpoint）
+    distanceOverrideKm: number|null
+    climbOverrideM: number|null
+    pendingMarkerInput: {}|null   # 打点浮层状态
+
+  持久化至 localStorage (trail_config_v6):
+    userProfile, waypointConfig, nutritionLibrary, safeMode
+
+  useEffect 自动重算：
+    trackPoints 变化 → 调用 computeTrail() → dispatch SET_RESULT
+    依赖项：trackPoints, userProfile, waypointConfig,
+            nutritionLibrary, distanceOverrideKm, climbOverrideM,
+            customMarkers
+
+================================================================
+  七、开发历史 (Changelog)
+================================================================
+
+v1.0 (2026-05-13 ~ 2026-05-14)
+  - 基础项目搭建：React + TypeScript + Tailwind + Vite
+  - 补碳计算器原有功能
+
+v2.0 (2026-05-15 ~ 2026-05-29)
+  - 新增 Trail 轨迹智能补给规划模块
+  - GPX/FIT/KML/KMZ 解析
+  - GAP 坡度配速引擎
+  - 智能补给航点寻路（35min 冷却期 + 评分）
+  - Leaflet 地图 + 渐变轨迹线 + 起终点标记
+  - GPX/TCX 导出
+  - 补给库管理（isActive 互斥激活）
+  - 自定义打点（吸附 + 弹窗命名）
+  - PWA 离线支持
+  - 部署至 Cloudflare Pages
+  - 修复 H1~H4, M4 严重 Bug
+
+v2.1 (2026-05-30)
+  - 地图瓦片切换 CartoDB Voyager (maxNativeZoom 18, maxZoom 22)
+  - 手机端单指拖动放开
+  - 补给航点锁定不可拖动
+  - 移除「双指移动地图」提示浮层
+  - 海拔剖面图平滑优化（贝塞尔曲线 + 移动端降采样）
+
+v3.0 (2026-06-01)
+  【本次重大更新 — 10 模块渐进式开发】
+
+  A. PWA 离线瓦片缓存
+     - 新建 tileCache.ts (IndexedDB 读写)
+     - MapView 右下角离线下载按钮 + 进度
+     - Workbox CartoDB 瓦片独立缓存规则 (30 天, 2000 entries)
+
+  B. 语义化航点增强
+     - safeEnglishName 含数量标注 (GELx2+SALTx3)
+     - customMarkerSym: 14 组关键词映射 Garmin 原生 sym
+       Danger/Danger Area, PEAK/Summit, WATER/Drinking Water, ...
+
+  C. CP 点感知系统
+     - waypoint.ts: 接近 CP 点强制清零缺口 + 重置冷却期
+     - MapView 打点浮层新增「🏁 标记为 CP 点」开关
+     - CP 点以 🏁 图标渲染
+
+  D. 分段配速策略卡片 (PaceStrategy.tsx)
+     - 自适应 4-8 段，分段配速 + ETA + 文字建议
+
+  E. 坡度分布分析表 (GradientBreakdown.tsx)
+     - 五级分类横条图（陡上/缓上/平路/缓下/陡降）
+
+  F. 交互式海拔剖面图
+     - Canvas touch/mousemove tooltip
+     - 实时显示距离/海拔/坡度/ETA
+
+  G. 航点补给品编辑
+     - ± 按钮增减 quantity，归零自动删除
+
+  H. 起点一键导航
+     - Google Maps 外链按钮
+
+  I. 航点类型筛选
+     - 全部/⚡能量胶/💧盐丸 pill 按钮
+
+  J. 等高线地形图层
+     - OpenTopoMap 叠加层 (opacity 0.35)
+
+  K. 引擎优化
+     - GAP 时间强制对齐目标完赛（等比缩放 timeElapsed）
+     - 代谢计算使用目标时间
+
+================================================================
+  八、验证清单
+================================================================
+
+  [✓] TypeScript 编译零错误 (tsc --noEmit)
+  [✓] GPX 解析：逐点提取 lat/lon/ele/time
+  [✓] GPX 导出：原始 <trkpt> 完整保留，<wpt> 仅注入
+  [✓] 坐标系：纯 WGS-84，无偏移
+  [✓] XSS 防护：xmlSafe 控制字符过滤
+  [✓] 离线：SW 预缓存 + IndexedDB 瓦片缓存
+  [✓] 移动端：响应式布局，44px 触控区，无遮挡
+  [✓] 深浅色主题：全站适配
+  [✓] 补给库 isActive 互斥激活
+
+================================================================
+  九、部署信息
+================================================================
+
+  平台：       Cloudflare Pages
+  项目名：     khs-fuel-planner
+  分支：       master
+  构建命令：   tsc -b && vite build
+  输出目录：   dist
+  百度统计 ID：c4f93b1dac6a0966cf1d04a57cf09e47
+  本地开发：   http://localhost:5173
+
+================================================================
+  十、已知局限与未来方向
+================================================================
+
+  当前局限：
+  - 仅支持 GPX/TCX 导出，未支持 FIT 格式导出
+  - 地图瓦片依赖 CartoDB/OpenTopoMap 免费服务，国内访问较慢
+  - 无 Strava/TrainingPeaks 一键分享
+  - 无用户账号/云端同步
+
+  可扩展方向：
+  - FIT 格式导出（Garmin 原生格式）
+  - 预设补给方案（50K/100K/炎热天气一键加载）
+  - 心率/功率数据叠加显示
+  - Strava API 集成
+  - 多人协作/分享路线
+
+================================================================
+  全文完
+================================================================

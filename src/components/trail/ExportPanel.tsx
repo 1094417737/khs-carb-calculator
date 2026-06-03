@@ -1,6 +1,6 @@
 import { useCallback } from 'react'
 import { useTrail } from '../../hooks/useTrail'
-import { generateGpxWithWaypoints } from '../../engine/trail/export-gpx'
+import { generateGpx } from '../../engine/trail/export-gpx'
 import { useAnalytics } from '../../hooks/useAnalytics'
 import Card from '../layout/Card'
 
@@ -9,7 +9,7 @@ function download(filename: string, content: string, mime: string) {
   const url = URL.createObjectURL(blob)
   const a = document.createElement('a')
   a.href = url; a.download = filename; a.click()
-  URL.revokeObjectURL(url)
+  setTimeout(() => URL.revokeObjectURL(url), 1000)
 }
 
 export default function ExportPanel() {
@@ -23,10 +23,10 @@ export default function ExportPanel() {
 
   const handleGpx = useCallback(() => {
     if (rawPoints.length === 0) return
-    const xml = generateGpxWithWaypoints(rawPoints, waypoints, safeMode, customMarkers)
+    const xml = generateGpx(rawPoints, waypoints, safeMode, customMarkers, state.rawGpxText)
     download('trail_nutrition.gpx', xml, 'application/gpx+xml')
     trackDownload('gpx', waypoints.length)
-  }, [rawPoints, waypoints, safeMode, customMarkers, trackDownload])
+  }, [rawPoints, waypoints, safeMode, customMarkers, state.rawGpxText, trackDownload])
 
   if (!result || rawPoints.length === 0) return null
 
@@ -37,8 +37,8 @@ export default function ExportPanel() {
         <span className="metric-label">导出到手表</span>
       </div>
 
-      {/* Safe mode toggle — bigger touch target */}
-      <label className="flex items-center gap-3 mb-3 px-3 py-2.5 rounded-lg bg-[#f5f5f7] dark:bg-[#2c2c2e] cursor-pointer">
+      {/* Safe mode toggle — 手机端加大触摸区 */}
+      <label className="flex items-center gap-3 mb-3 px-3 py-3 sm:py-2.5 rounded-lg bg-[#f5f5f7] dark:bg-[#2c2c2e] cursor-pointer active:bg-[#e8e8ed] dark:active:bg-[#3a3a3c] transition-colors">
         <input
           type="checkbox"
           checked={state.safeMode}
@@ -75,9 +75,9 @@ export default function ExportPanel() {
       <div className="space-y-2">
         <button
           type="button" onClick={handleGpx} disabled={rawPoints.length === 0}
-          className="w-full h-11 rounded-xl bg-accent-500 text-white text-sm font-medium hover:bg-accent-600 transition-colors disabled:opacity-40"
+          className="w-full h-12 rounded-xl bg-accent-500 text-white text-sm sm:text-base font-medium hover:bg-accent-600 transition-colors disabled:opacity-40 active:scale-[0.98]"
         >导出 GPX</button>
-        <p className="text-[11px] text-[#aeaeb2] -mt-1">支持佳明 (Garmin)、高驰 (Coros)、颂拓 (Suunto) 及各类带导航功能的手表通用</p>
+        <p className="text-[11px] sm:text-xs text-[#aeaeb2] -mt-1">支持佳明 (Garmin)、高驰 (Coros)、颂拓 (Suunto) 及各类带导航功能的手表通用</p>
       </div>
     </Card>
   )

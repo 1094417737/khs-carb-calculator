@@ -1,18 +1,13 @@
 import type { HomemadeRatio, GITrainingLevel } from '../types'
 import type { HomemadeMix } from '../types/results'
 
-/** 不同GI水平推荐浓度 */
-const CONCENTRATION: Record<GITrainingLevel, number> = {
-  Low: 0.06,
-  Moderate: 0.08,
-  Well: 0.10,
-}
-
 export function calculateHomemadeMix(
   ratio: HomemadeRatio,
   carbTargetPerHour: number,
   durationMinutes: number,
-  giTraining: GITrainingLevel
+  giTraining: GITrainingLevel,
+  fluidMlPerHour: number,
+  fluidTotalMl: number
 ): HomemadeMix {
   const hours = durationMinutes / 60
   const ratioMap: Record<HomemadeRatio, { g: number; f: number }> = {
@@ -22,12 +17,17 @@ export function calculateHomemadeMix(
   }
 
   const { g: gFrac, f: fFrac } = ratioMap[ratio]
-  const conc = CONCENTRATION[giTraining]
 
   const glucosePerHour = Math.round(carbTargetPerHour * gFrac)
   const fructosePerHour = Math.round(carbTargetPerHour * fFrac)
   const totalSugarPerHour = glucosePerHour + fructosePerHour
-  const waterMlPerHour = Math.round(totalSugarPerHour / conc)
+
+  // ═══ 硬改：水量强制取自全局 fluid 计算（温度+体重+出汗率），不再从糖÷浓度推导 ═══
+  const waterMlPerHour = fluidMlPerHour
+  // 实际浓度 = 糖 ÷ 全局水量（仅作信息展示，GI 适配逻辑后续可在此叠加）
+  const actualConc = waterMlPerHour > 0 ? totalSugarPerHour / waterMlPerHour : 0
+  const concPercent = Math.round(actualConc * 100)
+  // ═══════════════════════════════════════════════════════════════
 
   return {
     glucosePerHour,
@@ -37,15 +37,15 @@ export function calculateHomemadeMix(
     glucoseTotal: Math.round(glucosePerHour * hours),
     fructoseTotal: Math.round(fructosePerHour * hours),
     totalSugarTotal: Math.round(totalSugarPerHour * hours),
-    waterMlTotal: Math.round(waterMlPerHour * hours),
-    concentration: conc * 100,
-    explanation: buildHomemadeExplanation(ratio, conc, glucosePerHour, fructosePerHour, waterMlPerHour),
+    waterMlTotal: fluidTotalMl,
+    concentration: concPercent,
+    explanation: buildHomemadeExplanation(ratio, concPercent, glucosePerHour, fructosePerHour, waterMlPerHour),
   }
 }
 
 function buildHomemadeExplanation(
   ratio: HomemadeRatio,
-  concentration: number,
+  concentrationPercent: number,
   glucosePerHour: number,
   fructosePerHour: number,
   waterMl: number
@@ -58,5 +58,5 @@ function buildHomemadeExplanation(
   const sugarDesc = ratio === '1:1'
     ? `${glucosePerHour + fructosePerHour}g 白砂糖`
     : `${glucosePerHour}g 葡萄糖 + ${fructosePerHour}g 果糖`
-  return `${ratioLabel[ratio]}。每小时: ${sugarDesc}，溶于 ${waterMl}ml 水（${Math.round(concentration * 100)}%浓度）。`
+  return `${ratioLabel[ratio]}。每小时: ${sugarDesc}，溶于 ${waterMl}ml 水（实际浓度约 ${concentrationPercent}%，水量由全局补水需求统一计算）。`
 }

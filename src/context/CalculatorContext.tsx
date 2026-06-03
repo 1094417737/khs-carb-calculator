@@ -111,6 +111,7 @@ export const CalculatorContext = createContext<CalculatorContextValue>({
 // ============================================================
 
 import { calculate } from '../engine'
+import { validateCalculationIntegrity } from '../engine/validate'
 
 export function CalculatorProvider({ children }: { children: ReactNode }) {
   const [state, dispatch] = useReducer(reducer, {
@@ -137,6 +138,8 @@ export function CalculatorProvider({ children }: { children: ReactNode }) {
         strategy: state.strategyOptions,
       })
       dispatch({ type: 'SET_RESULTS', payload: result })
+      // 🔐 v3.1 天网自检：每次计算完成后运行全局数理断言
+      validateCalculationIntegrity(state.planInputs.weightKg, state.planInputs.tempC, result)
     } catch {
       dispatch({ type: 'SET_RESULTS', payload: null })
     }
@@ -156,6 +159,7 @@ export function CalculatorProvider({ children }: { children: ReactNode }) {
     try {
       const result = calculate({ plan: DEFAULT_PLAN, strategy: DEFAULT_STRATEGY })
       dispatch({ type: 'SET_RESULTS', payload: result })
+      validateCalculationIntegrity(DEFAULT_PLAN.weightKg, DEFAULT_PLAN.tempC, result)
     } catch {
       dispatch({ type: 'SET_RESULTS', payload: null })
     }

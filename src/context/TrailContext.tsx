@@ -1,9 +1,42 @@
 import React, { createContext, useContext, useReducer, useEffect, useRef, type ReactNode } from 'react'
 import type { TrailState, TrailAction, TrailResult } from '../types/trail'
 import { computeTrail } from '../engine/trail'
-import { defaultNutritionLibrary } from '../engine/trail/nutrition'
+import { validateTrailIntegrity } from '../engine/validate'
 
 const STORAGE_KEY = 'trail_config_v5'
+const SUPPLEMENTS_KEY = 'khs_trail_supplements'
+
+/** 冷启动默认种子 — GU 能量胶基准 + SaltStick 盐丸标准 */
+const DEFAULT_SUPPLEMENTS = [
+  { id: 'default-gel-1', type: 'gel' as const, name: '能量胶', kcal: 111, sodiumMg: 84, carbsG: 27, isActive: true },
+  { id: 'default-salt-1', type: 'salt' as const, name: '盐丸', kcal: 0, sodiumMg: 280, carbsG: 0, isActive: true },
+]
+
+/**
+ * 加载补给库 — 三层嗅探：
+ * 1. 专用 key (khs_trail_supplements) — 优先
+ * 2. 旧版 config key (trail_config_v5) — 向前兼容
+ * 3. 冷启动默认种子 — 新用户兜底
+ */
+function loadSupplements(): typeof DEFAULT_SUPPLEMENTS {
+  try {
+    const raw = localStorage.getItem(SUPPLEMENTS_KEY)
+    if (raw) {
+      const parsed = JSON.parse(raw)
+      if (Array.isArray(parsed) && parsed.length > 0) return parsed
+    }
+  } catch { /* ignore */ }
+  try {
+    const raw = localStorage.getItem(STORAGE_KEY)
+    if (raw) {
+      const parsed = JSON.parse(raw)
+      if (Array.isArray(parsed.nutritionLibrary) && parsed.nutritionLibrary.length > 0) {
+        return parsed.nutritionLibrary
+      }
+    }
+  } catch { /* ignore */ }
+  return DEFAULT_SUPPLEMENTS
+}
 
 function loadConfig() {
   try {
@@ -34,6 +67,8 @@ function saveConfig(state: TrailState) {
       nutritionLibrary: state.nutritionLibrary,
       safeMode: state.safeMode,
     }))
+    // 专用补给库 key — 独立持久化，避免 config 迁移时被意外清空
+    localStorage.setItem(SUPPLEMENTS_KEY, JSON.stringify(state.nutritionLibrary))
   } catch { /* ignore */ }
 }
 
@@ -44,11 +79,9 @@ const initialState: TrailState = {
   trackPoints: [],
   rawGpxText: null,
   userProfile: saved?.userProfile ?? { targetTimeMinutes: 240, tempC: 20, weightKg: 65, gutTolerance: 'low' },
-  nutritionLibrary: saved?.nutritionLibrary ?? defaultNutritionLibrary(),
+  nutritionLibrary: loadSupplements(),
   waypointConfig: saved?.waypointConfig ?? {
     searchWindowMinutes: 10,
-    mergeTimeMin: 5,
-    mergeDistanceM: 300,
     cooldownMinutes: 35,
     gelMaxPerStop: 2,
     saltMaxPerStop: 3,
@@ -208,6 +241,8 @@ export function TrailProvider({ children }: { children: ReactNode }) {
           customMarkers: state.customMarkers,
         })
         dispatch({ type: 'SET_RESULT', result })
+        // 🔐 v3.1 天网自检
+        validateTrailIntegrity(state.userProfile.weightKg, state.userProfile.tempC, result)
       } catch (e) {
         console.error('Trail 计算引擎异常:', e)
       }
