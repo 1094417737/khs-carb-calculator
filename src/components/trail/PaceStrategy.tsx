@@ -113,12 +113,9 @@ export default function PaceStrategy() {
             key={i}
             className="flex flex-col sm:flex-row sm:items-center gap-0.5 sm:gap-3 px-3 py-2.5 rounded-xl bg-[#f5f5f7] dark:bg-[#2c2c2e]"
           >
-            <div className="flex items-center gap-2 shrink-0">
+            <div className="flex items-center gap-2">
               <span className="text-xs sm:text-[11px] font-mono font-semibold text-[#1d1d1f] dark:text-white min-w-[70px]">
                 {seg.fromKm}–{seg.toKm}km
-              </span>
-              <span className={`text-[11px] sm:text-[10px] font-semibold px-1.5 py-0.5 rounded-full ${seg.color} bg-current/10`}>
-                {gradientLabel(seg.avgGradient)} {seg.avgGradient}%
               </span>
             </div>
 
