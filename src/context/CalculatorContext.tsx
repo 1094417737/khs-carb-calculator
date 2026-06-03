@@ -1,4 +1,4 @@
-import { createContext, useReducer, useEffect, useCallback, ReactNode } from 'react'
+import { createContext, useReducer, useEffect, useCallback, useMemo, ReactNode } from 'react'
 import type { PlanInputs, StrategyOptions } from '../types'
 import type { CalculationResult } from '../types/results'
 
@@ -165,17 +165,18 @@ export function CalculatorProvider({ children }: { children: ReactNode }) {
     }
   }, [])
 
+  // 🔒 useMemo 锁定 context value 引用 — 仅在依赖实质变更时重建
+  const ctxValue = useMemo(() => ({
+    planInputs: state.planInputs,
+    strategyOptions: state.strategyOptions,
+    results: state.results,
+    setPlanInput,
+    setStrategyOption,
+    reset,
+  }), [state.planInputs, state.strategyOptions, state.results, setPlanInput, setStrategyOption, reset])
+
   return (
-    <CalculatorContext.Provider
-      value={{
-        planInputs: state.planInputs,
-        strategyOptions: state.strategyOptions,
-        results: state.results,
-        setPlanInput,
-        setStrategyOption,
-        reset,
-      }}
-    >
+    <CalculatorContext.Provider value={ctxValue}>
       {children}
     </CalculatorContext.Provider>
   )

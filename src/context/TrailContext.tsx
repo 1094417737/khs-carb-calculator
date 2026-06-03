@@ -1,4 +1,4 @@
-import React, { createContext, useContext, useReducer, useEffect, useRef, type ReactNode } from 'react'
+import React, { createContext, useContext, useReducer, useEffect, useRef, useMemo, type ReactNode } from 'react'
 import type { TrailState, TrailAction, TrailResult } from '../types/trail'
 import { computeTrail } from '../engine/trail'
 import { validateTrailIntegrity } from '../engine/validate'
@@ -251,8 +251,11 @@ export function TrailProvider({ children }: { children: ReactNode }) {
     return () => { if (calcTimer.current) clearTimeout(calcTimer.current) }
   }, [state.trackPoints, state.userProfile, state.waypointConfig, state.nutritionLibrary, state.distanceOverrideKm, state.climbOverrideM, state.customMarkers])
 
+  // 🔒 useMemo 锁定 context value 引用 — 仅在 state/dispatch 实质变更时重建，防止全树连锁重渲染
+  const ctxValue = useMemo(() => ({ state, dispatch }), [state, dispatch])
+
   return (
-    <TrailContext.Provider value={{ state, dispatch }}>
+    <TrailContext.Provider value={ctxValue}>
       {children}
     </TrailContext.Provider>
   )
