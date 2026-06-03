@@ -19,22 +19,45 @@ const DEFAULT_SUPPLEMENTS = [
  * 3. 冷启动默认种子 — 新用户兜底
  */
 function loadSupplements(): typeof DEFAULT_SUPPLEMENTS {
+  // 1. 专用 key
   try {
     const raw = localStorage.getItem(SUPPLEMENTS_KEY)
     if (raw) {
       const parsed = JSON.parse(raw)
-      if (Array.isArray(parsed) && parsed.length > 0) return parsed
+      if (Array.isArray(parsed) && parsed.length > 0) {
+        // 逐项校验核心字段：杜绝脏数据引发运行时 NaN/undefined 异常
+        const valid = parsed.filter((item: any) =>
+          item && typeof item.id === 'string' && typeof item.type === 'string' &&
+          typeof item.kcal === 'number' && typeof item.carbsG === 'number' && typeof item.sodiumMg === 'number'
+        )
+        if (valid.length > 0) return valid
+        // 全是脏数据 → 物理切除
+        console.warn('[KHS] khs_trail_supplements 数据格式不兼容，已安全隔离并清除')
+        localStorage.removeItem(SUPPLEMENTS_KEY)
+      }
     }
-  } catch { /* ignore */ }
+  } catch (e) {
+    console.error('[KHS] 补给库缓存解析失败，已安全隔离:', e)
+    localStorage.removeItem(SUPPLEMENTS_KEY)
+  }
+
+  // 2. 旧版 config key — 向前兼容迁移
   try {
     const raw = localStorage.getItem(STORAGE_KEY)
     if (raw) {
       const parsed = JSON.parse(raw)
       if (Array.isArray(parsed.nutritionLibrary) && parsed.nutritionLibrary.length > 0) {
-        return parsed.nutritionLibrary
+        const valid = parsed.nutritionLibrary.filter((item: any) =>
+          item && typeof item.id === 'string' && typeof item.kcal === 'number'
+        )
+        if (valid.length > 0) return valid
       }
     }
-  } catch { /* ignore */ }
+  } catch (e) {
+    console.error('[KHS] 旧版缓存迁移失败，已安全隔离:', e)
+  }
+
+  // 3. 硬地板：无论如何返回默认种子，绝不允许白屏
   return DEFAULT_SUPPLEMENTS
 }
 
