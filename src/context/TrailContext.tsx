@@ -64,22 +64,34 @@ function loadSupplements(): typeof DEFAULT_SUPPLEMENTS {
 function loadConfig() {
   try {
     const raw = localStorage.getItem(STORAGE_KEY)
-    if (raw) {
-      const parsed = JSON.parse(raw)
-      // 迁移旧版数据：确保 isActive 字段存在且同类型互斥
-      if (Array.isArray(parsed.nutritionLibrary)) {
-        const seen = new Set<string>()
-        parsed.nutritionLibrary = parsed.nutritionLibrary.map((item: any) => {
-          const hasActive = item.isActive === true
-          if (hasActive && seen.has(item.type)) return { ...item, isActive: false }
-          if (hasActive) seen.add(item.type)
-          return { ...item, isActive: hasActive }
-        })
-      }
-      return parsed
+    if (!raw) return null
+    const parsed = JSON.parse(raw)
+    // 防御：不是对象直接丢弃
+    if (!parsed || typeof parsed !== 'object' || Array.isArray(parsed)) {
+      console.warn('[KHS] trail_config_v5 格式异常，已安全隔离')
+      localStorage.removeItem(STORAGE_KEY)
+      return null
     }
-  } catch { /* ignore */ }
-  return null
+    // 迁移旧版数据：确保 isActive 字段存在且同类型互斥
+    if (Array.isArray(parsed.nutritionLibrary)) {
+      const seen = new Set<string>()
+      parsed.nutritionLibrary = parsed.nutritionLibrary.map((item: any) => {
+        if (!item || typeof item !== 'object') return { id: '', type: 'gel', name: '', kcal: 0, sodiumMg: 0, carbsG: 0, isActive: false }
+        const hasActive = item.isActive === true
+        if (hasActive && seen.has(item.type)) return { ...item, isActive: false }
+        if (hasActive) seen.add(item.type)
+        return { ...item, isActive: hasActive }
+      })
+    }
+    // 校验关键字段类型
+    if (parsed.userProfile && typeof parsed.userProfile !== 'object') parsed.userProfile = undefined
+    if (parsed.waypointConfig && typeof parsed.waypointConfig !== 'object') parsed.waypointConfig = undefined
+    return parsed
+  } catch (e) {
+    console.error('[KHS] 配置缓存解析失败，已安全隔离:', e)
+    localStorage.removeItem(STORAGE_KEY)
+    return null
+  }
 }
 
 function saveConfig(state: TrailState) {
